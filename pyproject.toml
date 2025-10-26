@@ -2,7 +2,7 @@
 name = "datamat"
 version = "0.1.0"
 description = "Matrix Operations on Data Arrays"
-readme = "README.org"
+readme = "README.md"
 license = "CC-BY-NC-SA-4.0"
 authors = ["Ethan Ligon <ligon@berkeley.edu>"]
 packages = [{ include = "datamat", from = "src" }]
@@ -59,7 +59,7 @@ strict_optional = true
 Homepage = "https://github.com/ligon/DataMat"
 Repository = "https://github.com/ligon/DataMat"
 Documentation = "https://github.com/ligon/DataMat#readme"
-Bug Tracker = "https://github.com/ligon/DataMat/issues"
+BugTracker = "https://github.com/ligon/DataMat/issues"
 
 [build-system]
 requires = ["poetry-core>=1.7.0"]
