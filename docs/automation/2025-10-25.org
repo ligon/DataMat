@@ -12,3 +12,4 @@
 - Implemented fix so `DataMat @ DataMat` returning a single column now yields a `DataVec` with preserved column label; see branch =fix/matmul-labels=.
 - Added auto-generated names (`vec`, `vec_1`, …) for unnamed DataVecs and ensured matmul with a named vector preserves that name.
 - Added `DataMat.triu`/`tril` helpers plus tests ensuring triangular masks keep MultiIndex metadata.
+- Added `DataVec.random` / `DataMat.random` constructors with flexible distribution specification and tests.

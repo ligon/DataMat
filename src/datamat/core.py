@@ -1,5 +1,7 @@
+from collections.abc import Callable, Sequence
 from functools import cached_property
 from itertools import count
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -31,6 +33,122 @@ __all__ = [
 
 
 _vec_name_counter = count()
+RandomSpec = str | tuple[Any, ...] | Callable[..., Any]
+RNGInput = np.random.Generator | int | None
+
+
+def _normalize_rng(rng: RNGInput) -> np.random.Generator:
+    if rng is None:
+        return np.random.default_rng()
+    if isinstance(rng, np.random.Generator):
+        return rng
+    return np.random.default_rng(rng)
+
+
+def _coerce_distribution_params(
+    name: str, extra_args: Sequence[Any], params: dict[str, Any]
+) -> dict[str, Any]:
+    if not extra_args:
+        return params
+
+    if len(extra_args) == 1 and isinstance(extra_args[0], dict):
+        params.update(extra_args[0])
+        return params
+
+    primary = extra_args[0]
+    if name in {"chi2", "chisquare"}:
+        params.setdefault("df", primary)
+    elif name in {"bernoulli"}:
+        params.setdefault("p", primary)
+    elif name in {"binomial"}:
+        params.setdefault("n", primary)
+        if len(extra_args) > 1:
+            params.setdefault("p", extra_args[1])
+    elif name in {"poisson"}:
+        params.setdefault("lam", primary)
+    elif name in {"exponential"}:
+        params.setdefault("scale", primary)
+    elif name in {"uniform"}:
+        if len(extra_args) == 1:
+            params.setdefault("low", 0.0)
+            params.setdefault("high", primary)
+        else:
+            params.setdefault("low", primary)
+            params.setdefault("high", extra_args[1])
+    elif name in {"normal", "gaussian"}:
+        if len(extra_args) == 1:
+            params.setdefault("scale", primary)
+        else:
+            params.setdefault("loc", primary)
+            params.setdefault("scale", extra_args[1])
+    else:
+        raise ValueError(
+            f"Positional parameters not supported for distribution '{name}'. "
+            "Pass a dict for explicit keywords."
+        )
+    return params
+
+
+def _draw_random_array(
+    shape: tuple[int, ...],
+    distribution: RandomSpec,
+    rng: RNGInput = None,
+    **dist_kwargs: Any,
+) -> np.ndarray:
+    generator = _normalize_rng(rng)
+
+    if callable(distribution):
+        try:
+            sample = distribution(size=shape, rng=generator, **dist_kwargs)
+        except TypeError:
+            try:
+                sample = distribution(size=shape, random_state=generator, **dist_kwargs)
+            except TypeError:
+                sample = distribution(size=shape, **dist_kwargs)
+        return np.asarray(sample)
+
+    if isinstance(distribution, tuple):
+        if not distribution:
+            raise ValueError("Distribution tuple must contain a name.")
+        name = str(distribution[0]).lower()
+        extra_args = distribution[1:]
+    else:
+        name = str(distribution).lower()
+        extra_args = ()
+
+    params = dict(dist_kwargs)
+    params = _coerce_distribution_params(name, extra_args, params)
+
+    if name in {"normal", "gaussian"}:
+        loc = params.pop("loc", 0.0)
+        scale = params.pop("scale", 1.0)
+        return generator.normal(loc=loc, scale=scale, size=shape)
+    if name in {"standard_normal"}:
+        return generator.standard_normal(size=shape)
+    if name == "uniform":
+        low = params.pop("low", 0.0)
+        high = params.pop("high", 1.0)
+        return generator.uniform(low=low, high=high, size=shape)
+    if name in {"chi2", "chisquare"}:
+        df = params.pop("df", None)
+        if df is None:
+            raise ValueError("Chi-square distribution requires 'df'.")
+        return generator.chisquare(df=df, size=shape)
+    if name == "exponential":
+        scale = params.pop("scale", 1.0)
+        return generator.exponential(scale=scale, size=shape)
+    if name == "bernoulli":
+        p = params.pop("p", 0.5)
+        return generator.binomial(n=1, p=p, size=shape)
+    if name == "binomial":
+        n = params.pop("n", 1)
+        p = params.pop("p", 0.5)
+        return generator.binomial(n=n, p=p, size=shape)
+    if name == "poisson":
+        lam = params.pop("lam", params.pop("lambda", 1.0))
+        return generator.poisson(lam=lam, size=shape)
+
+    raise ValueError(f"Unknown distribution '{name}'.")
 
 
 def _fresh_vec_name(prefix: str = "vec") -> str:
@@ -190,6 +308,35 @@ class DataVec(pd.Series):
         """Drop index levels that don't vary."""
         self.index = utils.drop_vestigial_levels(self.index, axis=0)
         return self
+
+    @classmethod
+    def random(
+        cls,
+        size: int,
+        distribution: RandomSpec = "normal",
+        *,
+        index: Sequence[Any] | pd.Index | None = None,
+        idxnames: str | Sequence[str] | None = None,
+        name: str | None = None,
+        rng: RNGInput = None,
+        **dist_kwargs: Any,
+    ) -> "DataVec":
+        """Draw a random vector of given length."""
+
+        values = _draw_random_array((size,), distribution, rng, **dist_kwargs)
+
+        if index is None:
+            index_obj = pd.RangeIndex(size)
+        elif isinstance(index, pd.Index):
+            index_obj = index.copy()
+        else:
+            index_obj = pd.Index(index)
+
+        if idxnames is not None:
+            index_obj = index_obj.set_names(idxnames)
+
+        series = pd.Series(values, index=index_obj, name=name)
+        return cls(series, idxnames=idxnames, name=name)
 
 
 class DataMat(pd.DataFrame):
@@ -420,6 +567,51 @@ class DataMat(pd.DataFrame):
         levels = list(range(self.columns.nlevels))
         stacked = self.stack(level=levels, future_stack=True)
         return DataVec(stacked, idxnames=stacked.index.names)
+
+    @classmethod
+    def random(
+        cls,
+        shape: tuple[int, int],
+        distribution: RandomSpec = "normal",
+        *,
+        index: Sequence[Any] | pd.Index | None = None,
+        columns: Sequence[Any] | pd.Index | None = None,
+        idxnames: str | Sequence[str] | None = None,
+        colnames: str | Sequence[str] | None = None,
+        rng: RNGInput = None,
+        name: str | None = None,
+        **dist_kwargs: Any,
+    ) -> "DataMat":
+        """Draw a random matrix with optional labelled axes."""
+
+        if len(shape) != 2:
+            raise ValueError("Shape must be a tuple (rows, cols).")
+
+        nrows, ncols = shape
+        values = _draw_random_array((nrows, ncols), distribution, rng, **dist_kwargs)
+
+        if index is None:
+            index_obj = pd.RangeIndex(nrows)
+        elif isinstance(index, pd.Index):
+            index_obj = index.copy()
+        else:
+            index_obj = pd.Index(index)
+
+        if idxnames is not None:
+            index_obj = index_obj.set_names(idxnames)
+
+        if columns is None:
+            columns_obj = pd.RangeIndex(ncols)
+        elif isinstance(columns, pd.Index):
+            columns_obj = columns.copy()
+        else:
+            columns_obj = pd.Index(columns)
+
+        if colnames is not None:
+            columns_obj = columns_obj.set_names(colnames)
+
+        frame = pd.DataFrame(values, index=index_obj, columns=columns_obj)
+        return cls(frame, idxnames=idxnames, colnames=colnames, name=name)
 
     # Binary operations
     def matmul(self, other, strict=False, fillmiss=False):
