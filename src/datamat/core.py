@@ -1,4 +1,5 @@
 from functools import cached_property
+from itertools import count
 
 import numpy as np
 import pandas as pd
@@ -29,6 +30,14 @@ __all__ = [
 ]
 
 
+_vec_name_counter = count()
+
+
+def _fresh_vec_name(prefix: str = "vec") -> str:
+    suffix = next(_vec_name_counter)
+    return prefix if suffix == 0 else f"{prefix}_{suffix}"
+
+
 class DataVec(pd.Series):
     __pandas_priority__ = 5000
 
@@ -53,6 +62,9 @@ class DataVec(pd.Series):
                     data = data.squeeze()
             except AttributeError:
                 pass
+
+        if kwargs.get("name") is None and getattr(data, "name", None) is None:
+            kwargs["name"] = _fresh_vec_name()
 
         super().__init__(data=data, **kwargs)
 
@@ -391,6 +403,18 @@ class DataMat(pd.DataFrame):
         Y = matrix_product(self, other, strict=strict, fillmiss=fillmiss)
 
         if len(other.shape) <= 1:
+            if isinstance(other, DataVec):
+                series = (
+                    Y if isinstance(Y, pd.Series) else pd.Series(Y, index=self.index)
+                )
+                name = other.name
+                if isinstance(name, tuple) and len(name) == 1:
+                    name = name[0]
+                if name is None:
+                    name = _fresh_vec_name()
+                series.name = name
+                return DataVec(series, idxnames=self.index.names, name=name)
+
             return DataVec(Y)
 
         if isinstance(other, DataMat) and other.shape[1] == 1:
@@ -399,8 +423,11 @@ class DataMat(pd.DataFrame):
             else:
                 column_series = Y
             column_series = column_series.copy()
-            column_series.name = other.columns[0]
-            return DataVec(column_series, idxnames=self.index.names)
+            name = other.columns[0]
+            if isinstance(name, tuple) and len(name) == 1:
+                name = name[0]
+            column_series.name = name
+            return DataVec(column_series, idxnames=self.index.names, name=name)
 
         return DataMat(Y)
 

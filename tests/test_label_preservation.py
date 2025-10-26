@@ -33,7 +33,7 @@ def test_matmul_preserves_labels():
 
     assert isinstance(product, dm.DataVec)
     assert product.index.names == ("obs",)
-    assert product.name == column_label
+    assert product.name == "target"
 
 
 def test_diag_preserves_index_names():
