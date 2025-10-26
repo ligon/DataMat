@@ -37,3 +37,14 @@ def test_tril_preserves_labels():
     assert lower.index.equals(A.index)
     assert lower.columns.equals(A.columns)
     np.testing.assert_array_equal(lower.values, np.tril(A.values, k=-1))
+
+
+def test_vec_vectorisation():
+    A = build_matrix()
+    v = A.vec
+
+    assert isinstance(v, dm.DataVec)
+    assert len(v) == A.shape[0] * A.shape[1]
+    assert v.index.names == A.index.names + A.columns.names
+    assert v.iloc[0] == A.iloc[0, 0]
+    assert v.iloc[-1] == A.iloc[-1, -1]

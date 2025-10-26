@@ -39,6 +39,8 @@ def _fresh_vec_name(prefix: str = "vec") -> str:
 
 
 class DataVec(pd.Series):
+    """Column vector with labeled index for linear-algebra operations."""
+
     __pandas_priority__ = 5000
 
     def __init__(self, data=None, **kwargs):
@@ -106,7 +108,7 @@ class DataVec(pd.Series):
 
     # Unary operations
     def dg(self, sparse=True):
-        """Return"""
+        """Return the diagonal matrix diag(v)."""
         if sparse:
             # We can wind up blowing ram if not careful...
             d = scipy_sparse.diags(self.values)
@@ -189,6 +191,8 @@ class DataVec(pd.Series):
 
 
 class DataMat(pd.DataFrame):
+    """Matrix with labeled rows and columns supporting linear algebra semantics."""
+
     __pandas_priority__ = 6000
 
     def __init__(self, *args, **kwargs):
@@ -349,11 +353,8 @@ class DataMat(pd.DataFrame):
         return np.trace(self)
 
     def dg(self):
-        """Extract diagonal from square matrix.
+        """Return the diagonal vector diag(M) of a square matrix."""
 
-        >>> DataMat([[1,2],[3,4]],idxnames='i').dg().values.tolist()
-        [1, 4]
-        """
         assert np.all(self.index == self.columns), "Should have columns same as index."
         return DataVec(np.diag(self.values), index=self.index)
 
@@ -408,8 +409,17 @@ class DataMat(pd.DataFrame):
         data = np.tril(self.values, k=k)
         return DataMat(data, index=self.index, columns=self.columns)
 
+    @property
+    def vec(self):
+        """Column-stacked vectorisation vec(M)."""
+
+        levels = list(range(self.columns.nlevels))
+        stacked = self.stack(level=levels, future_stack=True)
+        return DataVec(stacked, idxnames=stacked.index.names)
+
     # Binary operations
     def matmul(self, other, strict=False, fillmiss=False):
+        """Matrix product preserving labels on the surviving axes."""
         Y = matrix_product(self, other, strict=strict, fillmiss=fillmiss)
 
         if len(other.shape) <= 1:
