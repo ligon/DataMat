@@ -14,3 +14,4 @@
 - Added `DataMat.triu`/`tril` helpers plus tests ensuring triangular masks keep MultiIndex metadata.
 - Added `DataVec.random` / `DataMat.random` constructors with flexible distribution specification and tests.
 - Introduced MkDocs configuration, documentation pages, and CI workflow for GitHub Pages deployment.
+- Wired MkDocs API pages to mkdocstrings so reference docs mirror current docstrings.

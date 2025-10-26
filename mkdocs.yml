@@ -16,6 +16,13 @@ nav:
       - DataMat: api/datamat.md
   - Notes:
       - Norms: notes/norms.md
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_source: false
 markdown_extensions:
   - admonition
   - codehilite
