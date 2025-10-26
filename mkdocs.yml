@@ -1,0 +1,23 @@
+site_name: DataMat
+site_url: https://ligon.github.io/DataMat/
+repo_url: https://github.com/ligon/DataMat
+repo_name: ligon/DataMat
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.tabs
+nav:
+  - Home: index.md
+  - User Guide:
+      - Getting Started: guide/getting-started.md
+  - API Reference:
+      - DataVec: api/datavec.md
+      - DataMat: api/datamat.md
+  - Notes:
+      - Norms: notes/norms.md
+markdown_extensions:
+  - admonition
+  - codehilite
+  - toc:
+      permalink: true
