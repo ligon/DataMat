@@ -1,0 +1,47 @@
+* DataMat
+/Matrix Operations on Data Arrays./ A pandas-friendly toolkit that wraps rich matrix algebra primitives in DataFrame/Series-aware containers (~DataMat~, ~DataVec~).
+
+** Features
+- Drop-in replacements for many ~numpy~ matrix operations that preserve pandas metadata.
+- Helpers for aligning MultiIndex structures and constructing dummy variables from categorical sources.
+- A ~DataVec~/~DataMat~ API that mirrors pandas while adding linear-algebra conveniences (projection, leverage, SVD, etc.).
+
+** Repository Layout
+#+begin_example
+src/datamat/        Core source code (DataMat, DataVec, utilities)
+docs/               Historical literate notebooks and design notes
+tests/              Unit tests
+scripts/            Development tooling (e.g., pre-push hook)
+#+end_example
+
+** Getting Started
+1. Install Python 3.11 (e.g., via pyenv) and Poetry (https://python-poetry.org/docs/).
+2. Create and initialise the virtual environment:
+   #+begin_src bash
+   poetry env use 3.11
+   poetry install --with dev
+   # optional extras, e.g. lsms, can be added via `poetry add`
+   #+end_src
+3. Run the quality gates and test suite:
+   #+begin_src bash
+   poetry run ruff check .
+   poetry run black --check .
+   poetry run mypy src tests
+   poetry run pytest
+   # or simply
+   make check
+   #+end_src
+
+** Development Workflow
+- Contribution guidelines: [[file:CONTRIBUTING.org][CONTRIBUTING.org]]
+- Agent-specific policies: [[file:AGENTS.org][AGENTS.org]]
+- Pre-push automation: =ln -s ../../scripts/pre-push.sh .git/hooks/pre-push=
+
+** Documentation
+The historical literate source from the original Metrics Miscellany project lives in =docs/metrics_miscellany.org=. It remains the best place to reference derivations and design notes. Current development happens directly in the Python modules under =src/datamat/=; augment the Org materials when adding new capabilities.
+
+** Optional Dependencies
+- Robust Stata ingestion relies on =lsms.tools.from_dta=. Install the =lsms= package if you plan to call =datamat.read_stata=.
+
+** License
+The project continues under the original license; see =LICENSE.txt=.

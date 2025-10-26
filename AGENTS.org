@@ -1,0 +1,83 @@
+#+TITLE: Agent Operations Guide
+#+AUTHOR: DataMat Maintainers
+#+OPTIONS: toc:nil num:nil
+
+* Purpose
+This guide defines the operating rules for automated assistants (LLM agents,
+scripting bots, etc.) collaborating on the =DataMat= project. It complements
+human-facing policies in =README.org= and =CONTRIBUTING.org= by translating them
+into concrete, repeatable checklists.
+
+* Scope and Alignment
+- Follow the dataframe and linear-algebra conventions documented in
+  [[file:docs/metrics_miscellany.org][docs/metrics_miscellany.org]]; this guide only clarifies how agents apply
+  them in practice.
+- Human contributors should continue to reference =CONTRIBUTING.org= for the
+  canonical workflow; this document does not override maintainer review
+  requirements.
+- Automation-specific experiment notes belong under =docs/automation/= (create
+  the directory if needed) and should link back to this file.
+
+* Operating Principles
+1. **Preserve semantics**: keep existing API names, index semantics, and pandas
+   metadata contracts intact.
+2. **Minimal footprint**: touch only the files required for a task; avoid broad
+   refactors unless explicitly requested.
+3. **Verifiable output**: accompany substantive changes with runnable commands
+   (tests or scripts) that a maintainer can replay locally.
+4. **Transparent reasoning**: record non-obvious design choices in commit
+   messages or brief Org snippets under =docs/automation/=.
+5. **Explicit attribution**: include a =Co-authored-by: Assistant (Codex CLI)=
+   trailer (or equivalent) in commits produced by automated contributors.
+
+* Pre-Execution Checklist
+1. Review relevant sections in =docs/metrics_miscellany.org= (especially the
+   =DataMat= chapter) before editing matrix utilities or index logic.
+2. Sync with the current default branch without rewriting history.
+3. Confirm environment constraints in =README.org= (Python version, Poetry
+   workflow, optional dependencies such as =lsms=).
+4. Note sandbox limitations (filesystem scope, network access) and obtain
+   explicit approval before executing commands that require escalation.
+
+* Allowed Commands and Tooling
+- Favor =poetry run python=, =poetry run pytest=, and the Makefile targets;
+  avoid altering global environments.
+- Prefer =rg=, =python -m doctest=, or project-specific scripts for inspection.
+- Refrain from destructive commands (e.g., =rm -rf= outside tmp dirs,
+  =git reset --hard=).
+- Halt and escalate if external network access or privileged operations are
+  required.
+
+* Collaboration Protocol
+- **Task intake**: restate the assignment, identify target modules, and flag
+  ambiguities before editing files.
+- **Status notes**: maintain a short status section at the top of any
+  in-progress Org log (date, task, pending questions).
+- **Timestamps**: capture session summaries with active Org date stamps
+  (e.g., =<2025-10-24 Fri>=) using the local calendar.
+- **Handoff**: summarize edits, list verification commands, and reference files
+  with Org-compatible paths and line numbers.
+- **Review support**: provide focused diffs; avoid reformatting unrelated code.
+- **Quality checks**: run =poetry run ruff check .=, =poetry run black --check .=,
+  =poetry run mypy src tests=, and =poetry run pytest= before handing off, unless
+  the task explicitly precludes them.
+
+* Testing and Validation
+- Prefer deterministic fixtures (set random seeds) when generating sample data.
+- For linear-algebra routines, include assertions about shapes, symmetry, and
+  idempotence where applicable.
+- Document any stochastic elements (e.g., random matrices) with the seed used so
+  maintainers can reproduce results.
+
+* Incident Response
+- If a command fails due to sandbox or permission limits, stop immediately,
+  record the failure, and request guidance with the blocked command and
+  justification.
+- When unexpected repository state appears (e.g., unrelated untracked files),
+  pause and ask for direction instead of overwriting data.
+- Document any manual rollbacks or file restorations in handoff notes.
+
+* Change Log
+** <2025-10-24 Fri> Assistant (Codex CLI)
+- Initial version establishing operating principles, workflow, and reporting
+  expectations for automated contributors.

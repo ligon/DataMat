@@ -1,0 +1,8 @@
+#+TITLE: Automation Log
+#+AUTHOR: Assistant (Codex CLI)
+#+OPTIONS: toc:nil num:nil
+
+* <2025-10-25 Sat> Assistant (Codex CLI)
+- Initialized automation logging per maintainer request; created =docs/automation/=.
+- Confirmed Poetry workflow is operational (`poetry install --with dev`, `poetry run pytest`).
+- Ready to record future assistant sessions in this file; add new subsections per task.

@@ -1,0 +1,66 @@
+#+TITLE: Contributing Guidelines
+#+OPTIONS: toc:nil num:nil
+
+* Contributing to DataMat
+We welcome contributions that improve the DataMat toolkit for matrix operations
+on labeled data arrays. All contributors must respect the dataframe conventions
+captured in =docs/metrics_miscellany.org=.
+
+** 1. Standards
+Before writing code, review:
+
+* [[file:docs/metrics_miscellany.org][DataMat & DataVec design notes]]
+
+Pay close attention to how indices, column levels, and metadata are preserved
+through matrix operations.
+
+** 2. Code Style
+- Python ≥ 3.11
+- Type hints encouraged for public functions
+- Follow PEP 8 unless clarity dictates otherwise
+- Keep modules focused (e.g., index utilities vs. linear algebra routines)
+- Prefer explicit imports from =datamat.utils= when sharing helpers
+
+** 3. Documentation
+- Author new design notes and examples in Org-mode under =docs/=
+- Public functions/classes should document:
+  - Purpose and behaviour
+  - Expected input/output types and shapes
+  - Invariants (e.g., symmetry, positive-definiteness) and references if
+    applicable
+
+** 4. Tests
+- Write unit tests for new behaviours under =tests/=
+- Include shape checks and metadata preservation assertions for DataFrame
+  operations
+- Use deterministic fixtures (set seeds) for stochastic routines where feasible
+
+** 5. Development Workflow
+- Use Poetry for dependency management
+- Create topic branches (e.g., =feature/leverage-speedup=)
+- Ensure Makefile targets succeed locally before opening a pull request:
+  #+begin_example
+  poetry install --with dev
+  make check
+  #+end_example
+- Optionally symlink the pre-push hook to automate the checks:
+  #+begin_example
+  ln -s ../../scripts/pre-push.sh .git/hooks/pre-push
+  #+end_example
+
+** 6. Assistant Integration
+LLM-based assistants must also follow [[file:AGENTS.org][AGENTS.org]]. In particular:
+1. Review the relevant sections of =docs/metrics_miscellany.org= prior to code
+   generation.
+2. Avoid introducing new API aliases when established names exist.
+3. Provide brief rationale for non-trivial design decisions in the handoff
+   summary or Org notes.
+
+** 7. Communication
+Raise issues via GitHub with reproducible examples, version information, and
+citations when appropriate.
+
+** 8. License
+By contributing, you agree to release your work under the Creative Commons
+Attribution–NonCommercial–ShareAlike 4.0 International License (CC BY-NC-SA 4.0);
+see [[file:LICENSE.txt][LICENSE.txt]] for details.
