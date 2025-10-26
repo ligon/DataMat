@@ -6,6 +6,16 @@ readme = "README.org"
 license = "CC-BY-NC-SA-4.0"
 authors = ["Ethan Ligon <ligon@berkeley.edu>"]
 packages = [{ include = "datamat", from = "src" }]
+keywords = ["pandas", "matrix", "econometrics", "dataframe"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: Other/Proprietary License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Mathematics",
+]
 
 [tool.poetry.dependencies]
 python = ">=3.11,<4.0"
@@ -44,6 +54,12 @@ python_version = "3.11"
 warn_unused_ignores = true
 ignore_missing_imports = true
 strict_optional = true
+
+[tool.poetry.urls]
+Homepage = "https://github.com/ligon/DataMat"
+Repository = "https://github.com/ligon/DataMat"
+Documentation = "https://github.com/ligon/DataMat#readme"
+Bug Tracker = "https://github.com/ligon/DataMat/issues"
 
 [build-system]
 requires = ["poetry-core>=1.7.0"]
