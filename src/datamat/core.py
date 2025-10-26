@@ -121,6 +121,8 @@ class DataVec(pd.Series):
             return DataMat(np.diag(self.values), index=self.index, columns=self.index)
 
     def norm(self, ord=None, **kwargs):
+        """Vector norm ‖v‖_ord (defaults to the Euclidean norm)."""
+
         return np.linalg.norm(self, ord, **kwargs)
 
     def inv(self):
@@ -342,6 +344,8 @@ class DataMat(pd.DataFrame):
         return DataMat(matrix_inv(self))
 
     def norm(self, ord=None, **kwargs):
+        """Matrix norm ‖M‖_ord mirroring :func:`numpy.linalg.norm`."""
+
         return np.linalg.norm(self, ord, **kwargs)
 
     @cached_property
