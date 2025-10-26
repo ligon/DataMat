@@ -1,12 +1,12 @@
 """Utility functions supporting DataMat/DataVec classes."""
+
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-from pandas import MultiIndex, concat, get_dummies
+from pandas import MultiIndex, get_dummies
 from pandas.errors import InvalidIndexError
 from scipy import sparse as scipy_sparse
-
 
 __all__ = [
     "concat",
@@ -84,9 +84,7 @@ def diag(X, sparse=True):
     except IndexError:
         if sparse:
             d = scipy_sparse.diags(X.values)
-            d = pd.DataFrame.sparse.from_spmatrix(
-                d, index=X.index, columns=X.index
-            )
+            d = pd.DataFrame.sparse.from_spmatrix(d, index=X.index, columns=X.index)
         else:
             d = pd.DataFrame(np.diag(X.values), index=X.index, columns=X.index)
     except AttributeError:
@@ -120,7 +118,7 @@ def drop_vestigial_levels(idx, axis=0, both=False, multiindex=True):
     if transpose:
         idx = idx.T
 
-    if isinstance(idx, (pd.DataFrame, pd.Series)):
+    if isinstance(idx, pd.DataFrame | pd.Series):
         df = idx
         idx = df.index
         humpty_dumpty = True
@@ -164,7 +162,7 @@ def qr(X):
 def leverage(X):
     """Return leverage (diagonal of the hat matrix) for design matrix X."""
     Q, _ = qr(X)
-    return (Q ** 2).sum(axis=1)
+    return (Q**2).sum(axis=1)
 
 
 def svd(A, hermitian=False):
@@ -282,7 +280,7 @@ def dummies(df, cols, suffix=False):
         v = df[colcols]
 
     usecols = [v[s].squeeze() for s in idxcols + colcols]
-    tuples = pd.Series(list(zip(*usecols)), index=v.index)
+    tuples = pd.Series(list(zip(*usecols, strict=False)), index=v.index)
 
     v = get_dummies(tuples).astype(int)
 

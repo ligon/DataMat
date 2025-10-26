@@ -7,3 +7,4 @@
 - Confirmed Poetry workflow is operational (`poetry install --with dev`, `poetry run pytest`).
 - Ready to record future assistant sessions in this file; add new subsections per task.
 - Added release/publish automation in =Makefile= and wired `pyproject.toml` metadata for PyPI. Remember to run `make README.md` before `poetry` commands that inspect the readme.
+- Resolved outstanding lint issues in `src/datamat` and the test suite; `make check` now passes cleanly.

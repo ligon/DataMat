@@ -1,5 +1,6 @@
 """Matrix Operations on Data Arrays."""
 
+from . import utils
 from .core import (
     DataMat,
     DataVec,
@@ -13,7 +14,6 @@ from .core import (
     reconcile_indices,
     reduced_rank_regression,
 )
-from . import utils
 
 __all__ = [
     "DataMat",

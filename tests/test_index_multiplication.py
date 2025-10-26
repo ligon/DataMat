@@ -1,7 +1,5 @@
-import numpy as np
-import pandas as pd
-
 import datamat as dm
+import pandas as pd
 
 
 def test_index_multiplication():

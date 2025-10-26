@@ -1,7 +1,6 @@
+import datamat as dm
 import numpy as np
 import pandas as pd
-
-import datamat as dm
 
 
 def test_matmul_matrix():
