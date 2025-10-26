@@ -398,6 +398,16 @@ class DataMat(pd.DataFrame):
         """Moore-Penrose pseudo-inverse."""
         return DataMat(matrix_pinv(self))
 
+    def triu(self, k: int = 0):
+        """Return upper triangular part as DataMat, preserving labels."""
+        data = np.triu(self.values, k=k)
+        return DataMat(data, index=self.index, columns=self.columns)
+
+    def tril(self, k: int = 0):
+        """Return lower triangular part as DataMat, preserving labels."""
+        data = np.tril(self.values, k=k)
+        return DataMat(data, index=self.index, columns=self.columns)
+
     # Binary operations
     def matmul(self, other, strict=False, fillmiss=False):
         Y = matrix_product(self, other, strict=strict, fillmiss=fillmiss)
