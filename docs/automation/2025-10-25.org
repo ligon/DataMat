@@ -9,3 +9,5 @@
 - Added release/publish automation in =Makefile= and wired `pyproject.toml` metadata for PyPI. Remember to run `make README.md` before `poetry` commands that inspect the readme.
 - Resolved outstanding lint issues in `src/datamat` and the test suite; `make check` now passes cleanly.
 - Added `tests/test_label_preservation.py` to lock in expectations about kron/diag labels and capture the outstanding matmul naming bug (xfail).
+- Implemented fix so `DataMat @ DataMat` returning a single column now yields a `DataVec` with preserved column label; see branch =fix/matmul-labels=.
+- Added auto-generated names (`vec`, `vec_1`, …) for unnamed DataVecs and ensured matmul with a named vector preserves that name.

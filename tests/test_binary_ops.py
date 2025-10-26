@@ -19,15 +19,20 @@ def test_matmul_matrix():
         (datamat_A, datamat_B),
     ]:
         result = A @ B
-        assert isinstance(result, type(A))
+        if isinstance(A, dm.DataMat):
+            assert isinstance(result, dm.DataVec)
+        else:
+            assert isinstance(result, type(A))
 
 
 def test_matmul_matvec():
     datamat_A = dm.DataMat([[1, 2], [3, 4]])
-    datamat_b = dm.DataVec([1, 1])
+    datamat_b = dm.DataVec([1, 1], name="beta")
 
     pandas_b = pd.Series([1, 1])
 
     for A, b in [(datamat_A, datamat_b), (datamat_A, pandas_b)]:
         result = A @ b
         assert isinstance(result, type(b))
+        if isinstance(b, dm.DataVec):
+            assert result.name == b.name

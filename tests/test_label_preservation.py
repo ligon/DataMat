@@ -1,7 +1,6 @@
 import datamat as dm
 import numpy as np
 import pandas as pd
-import pytest
 
 
 def test_kron_preserves_multiindex_labels():
@@ -24,17 +23,17 @@ def test_kron_preserves_multiindex_labels():
     assert list(kron_ab.columns) == expected_columns
 
 
-@pytest.mark.xfail(reason="Matmul drops column names on 1-column outputs", strict=True)
 def test_matmul_preserves_labels():
     A = dm.DataMat([[1, 2]], idxnames=["obs"], colnames=["feature"])
     B = dm.DataMat([[3], [4]], idxnames=["feature"])
-    B.columns = pd.MultiIndex.from_tuples([("target",)], names=["measurement"])
+    column_label = ("target",)
+    B.columns = pd.MultiIndex.from_tuples([column_label], names=["measurement"])
 
     product = A @ B
 
+    assert isinstance(product, dm.DataVec)
     assert product.index.names == ("obs",)
-    assert product.columns.names == ("measurement",)
-    assert list(product.columns) == [("target",)]
+    assert product.name == "target"
 
 
 def test_diag_preserves_index_names():
