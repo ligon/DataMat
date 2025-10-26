@@ -19,7 +19,10 @@ def test_matmul_matrix():
         (datamat_A, datamat_B),
     ]:
         result = A @ B
-        assert isinstance(result, type(A))
+        if isinstance(A, dm.DataMat):
+            assert isinstance(result, dm.DataVec)
+        else:
+            assert isinstance(result, type(A))
 
 
 def test_matmul_matvec():

@@ -392,8 +392,17 @@ class DataMat(pd.DataFrame):
 
         if len(other.shape) <= 1:
             return DataVec(Y)
-        else:
-            return DataMat(Y)
+
+        if isinstance(other, DataMat) and other.shape[1] == 1:
+            if isinstance(Y, pd.DataFrame):
+                column_series = Y.iloc[:, 0]
+            else:
+                column_series = Y
+            column_series = column_series.copy()
+            column_series.name = other.columns[0]
+            return DataVec(column_series, idxnames=self.index.names)
+
+        return DataMat(Y)
 
     __matmul__ = matmul
 
