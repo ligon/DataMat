@@ -53,15 +53,22 @@ README.md: README.org
 
 release: check
 	test -z "$$(git status --porcelain)" || (echo "Working tree must be clean before releasing." >&2 && exit 1)
-	$(POETRY) version $(VERSION_PART)
+	@if [ -n "$(VERSION)" ]; then \
+		$(POETRY) version $(VERSION); \
+	elif [ -n "$(VERSION_PART)" ]; then \
+		$(POETRY) version $(VERSION_PART); \
+	fi
+	@if ! git diff --quiet pyproject.toml src/datamat/__init__.py; then \
+		VERSION=$$( $(POETRY) version --short ); \
+		git add pyproject.toml src/datamat/__init__.py && \
+		git commit -m "Release $$VERSION" -m "Co-authored-by: Assistant (Codex CLI)"; \
+	fi
 	VERSION=$$( $(POETRY) version --short ); \
-	  git add pyproject.toml src/datamat/__init__.py && \
-	  git commit -m "Release $$VERSION" -m "Co-authored-by: Assistant (Codex CLI)" && \
-	  git tag v$$VERSION
+	  git rev-parse -q --verify refs/tags/v$$VERSION >/dev/null || git tag v$$VERSION
 	git push
 	git push --tags
 
 publish: release
 	$(MAKE) README.md
 	$(POETRY) build
-	$(POETRY) publish --build
+	$(POETRY) publish --build --skip-existing --no-interaction
