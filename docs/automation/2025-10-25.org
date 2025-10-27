@@ -16,3 +16,6 @@
 - Introduced MkDocs configuration, documentation pages, and CI workflow for GitHub Pages deployment.
 - Wired MkDocs API pages to mkdocstrings so reference docs mirror current docstrings.
 - Docs workflow now installs Emacs, regenerates `README.md`, and installs doc dependencies via Poetry's `docs` group before publishing.
+
+* <2025-10-27 Mon> Assistant (Codex CLI)
+- Logged the successful `make check` run ahead of the planned 0.2.0a1 alpha release; lint, type checks, and tests all passed.
