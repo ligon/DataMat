@@ -7,7 +7,6 @@ on:
     paths:
       - mkdocs.yml
       - docs/**
-      - docs/requirements.txt
   workflow_dispatch:
 
 permissions:
@@ -31,10 +30,11 @@ jobs:
       - name: Install documentation dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r docs/requirements.txt
-      - name: Install package for API docs
-        run: pip install -e .
+          pip install poetry
+          poetry install --only docs
+      - name: Install package for API docs (editable)
+        run: poetry install --only-root
       - name: Deploy with MkDocs
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: mkdocs gh-deploy --force
+        run: poetry run mkdocs gh-deploy --force

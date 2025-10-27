@@ -31,6 +31,17 @@ mypy = "^1.10.0"
 ipython = "^8.26.0"
 matplotlib = "^3.10.0"
 
+[tool.poetry.group.docs.dependencies]
+mkdocs = ">=1.5"
+mkdocs-material = ">=9.5"
+mkdocstrings = { version = ">=0.24", extras = ["python"] }
+jax = {extras = ["cpu"], version = "^0.8.0"}
+
+[tool.poetry.group.docs.dependencies]
+mkdocs = ">=1.5"
+mkdocs-material = ">=9.5"
+mkdocstrings = { version = ">=0.24", extras = ["python"] }
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
