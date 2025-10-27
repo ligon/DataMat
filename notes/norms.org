@@ -1,0 +1,21 @@
+* Norm conventions
+:PROPERTIES:
+:CUSTOM_ID: norms
+:END:
+
+These methods wrap mathematical norms (\|x\|_p, \|A\|_p) while preserving labels.
+
+** DataVec.norm
+- `ord=2` (default): Euclidean norm \(\sqrt{\sum_i x_i^2}\).
+- `ord=1`: Manhattan norm \(\sum_i |x_i|\).
+- `ord=\infty`: max norm \(\max_i |x_i|\).
+- `ord=0`: number of non-zero entries.
+- Other values follow `numpy.linalg.norm` (including negative orders).
+
+** DataMat.norm
+- `ord=None` (default) or `'fro'`: Frobenius norm \(\sqrt{\sum_{i,j} a_{ij}^2}\).
+- `ord=1`: maximum column sum \(\max_j \sum_i |a_{ij}|\).
+- `ord=\infty`: maximum row sum \(\max_i \sum_j |a_{ij}|\).
+- `ord=2`: spectral norm (largest singular value).
+- `ord='nuc'`: nuclear norm (sum of singular values).
+- Additional options match `numpy.linalg.norm` semantics.

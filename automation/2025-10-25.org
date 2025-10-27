@@ -1,0 +1,21 @@
+#+TITLE: Automation Log
+#+AUTHOR: Assistant (Codex CLI)
+#+OPTIONS: toc:nil num:nil
+
+* <2025-10-25 Sat> Assistant (Codex CLI)
+- Initialized automation logging per maintainer request; created =docs/automation/=. 
+- Confirmed Poetry workflow is operational (`poetry install --with dev`, `poetry run pytest`).
+- Ready to record future assistant sessions in this file; add new subsections per task.
+- Added release/publish automation in =Makefile= and wired `pyproject.toml` metadata for PyPI. Remember to run `make README.md` before `poetry` commands that inspect the readme.
+- Resolved outstanding lint issues in `src/datamat` and the test suite; `make check` now passes cleanly.
+- Added `tests/test_label_preservation.py` to lock in expectations about kron/diag labels and capture the outstanding matmul naming bug (xfail).
+- Implemented fix so `DataMat @ DataMat` returning a single column now yields a `DataVec` with preserved column label; see branch =fix/matmul-labels=.
+- Added auto-generated names (`vec`, `vec_1`, …) for unnamed DataVecs and ensured matmul with a named vector preserves that name.
+- Added `DataMat.triu`/`tril` helpers plus tests ensuring triangular masks keep MultiIndex metadata.
+- Added `DataVec.random` / `DataMat.random` constructors with flexible distribution specification and tests.
+- Introduced MkDocs configuration, documentation pages, and CI workflow for GitHub Pages deployment.
+- Wired MkDocs API pages to mkdocstrings so reference docs mirror current docstrings.
+- Docs workflow now installs Emacs, regenerates `README.md`, and installs doc dependencies via Poetry's `docs` group before publishing.
+
+* <2025-10-27 Mon> Assistant (Codex CLI)
+- Logged the successful `make check` run ahead of the planned 0.2.0a1 alpha release; lint, type checks, and tests all passed.

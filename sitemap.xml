@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url>
+         <loc>https://ligon.github.io/DataMat/</loc>
+         <lastmod>2025-10-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ligon.github.io/DataMat/api/datamat/</loc>
+         <lastmod>2025-10-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ligon.github.io/DataMat/api/datavec/</loc>
+         <lastmod>2025-10-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ligon.github.io/DataMat/guide/getting-started/</loc>
+         <lastmod>2025-10-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ligon.github.io/DataMat/notes/norms/</loc>
+         <lastmod>2025-10-27</lastmod>
+    </url>
+</urlset>

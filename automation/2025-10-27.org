@@ -1,0 +1,10 @@
+#+TITLE: Automation Log — 2025-10-27
+#+AUTHOR: Assistant (Codex CLI)
+#+OPTIONS: toc:nil num:nil
+
+* <2025-10-27 Mon> Assistant (Codex CLI)
+- Tagged `v0.2.0a1` and pushed release commit/tag to =origin=; pre-push hook reran `make check`.
+- Confirmed README export (`make README.md`) was current and built artifacts via `poetry build`.
+- Published wheel and sdist to PyPI with `poetry publish --build`.
+- Next: verify PyPI metadata once propagation finishes and draft release notes for GitHub.
+- Added `scripts/generate_release_notes.py` and `make release-notes` to prepare GitHub release text from git history.
