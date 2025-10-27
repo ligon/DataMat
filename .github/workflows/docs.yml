@@ -22,6 +22,12 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - name: Install Emacs for Org export
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y emacs-nox
+      - name: Generate README.md from Org source
+        run: make README.md
       - name: Install documentation dependencies
         run: |
           python -m pip install --upgrade pip

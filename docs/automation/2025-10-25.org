@@ -15,3 +15,4 @@
 - Added `DataVec.random` / `DataMat.random` constructors with flexible distribution specification and tests.
 - Introduced MkDocs configuration, documentation pages, and CI workflow for GitHub Pages deployment.
 - Wired MkDocs API pages to mkdocstrings so reference docs mirror current docstrings.
+- Docs workflow now installs Emacs and regenerates `README.md` before publishing to avoid packaging issues.
