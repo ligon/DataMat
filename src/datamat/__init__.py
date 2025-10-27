@@ -3,6 +3,7 @@
 from . import utils
 from .core import (
     DataMat,
+    DataMatJax,
     DataVec,
     canonical_variates,
     concat,
@@ -18,6 +19,7 @@ from .core import (
 __all__ = [
     "DataMat",
     "DataVec",
+    "DataMatJax",
     "canonical_variates",
     "concat",
     "generalized_eig",

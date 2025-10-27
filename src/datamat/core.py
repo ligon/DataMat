@@ -1,11 +1,31 @@
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from functools import cached_property
 from itertools import count
-from typing import Any
+from typing import TYPE_CHECKING, Any, TypeAlias, cast
 
 import numpy as np
 import pandas as pd
 from scipy import sparse as scipy_sparse
+
+try:  # Optional JAX dependency for device array conversions.
+    import jax
+    import jax.numpy as jnp
+    from jax import tree_util as jax_tree_util
+
+    _JAX_AVAILABLE = True
+except ImportError:  # pragma: no cover - JAX not installed.
+    jax = cast(Any, None)
+    jnp = cast(Any, None)
+    jax_tree_util = cast(Any, None)
+    _JAX_AVAILABLE = False
+
+if TYPE_CHECKING:  # pragma: no cover - typing aid
+    import jax.numpy as _jax_typing
+
+    JaxArray: TypeAlias = _jax_typing.ndarray
+else:
+    JaxArray: TypeAlias = Any
 
 from . import utils
 from .utils import inv as matrix_inv
@@ -20,6 +40,7 @@ except ImportError:  # pragma: no cover - optional path
 __all__ = [
     "DataVec",
     "DataMat",
+    "DataMatJax",
     "concat",
     "get_names",
     "reconcile_indices",
@@ -518,6 +539,33 @@ class DataMat(pd.DataFrame):
             self.columns = utils.drop_vestigial_levels(self.columns, axis=1)
         return self
 
+    def to_jax(self, *, dtype: Any | None = float) -> "DataMatJax":
+        """Convert the matrix into a JAX-compatible wrapper retaining labels."""
+
+        if not _JAX_AVAILABLE:  # pragma: no cover - depends on optional JAX
+            raise RuntimeError(
+                "DataMat.to_jax() requires JAX. Install the 'jax' extra or add "
+                "JAX to your environment."
+            )
+
+        if dtype is None:
+            numpy_array = self.to_numpy()
+            values = jnp.asarray(numpy_array, dtype=numpy_array.dtype)
+        else:
+            numpy_array = self.to_numpy(dtype=dtype)
+            values = jnp.asarray(numpy_array, dtype=numpy_array.dtype)
+        return DataMatJax(
+            values=values,
+            index=self.index.copy(),
+            columns=self.columns.copy(),
+        )
+
+    @classmethod
+    def from_jax(cls, wrapper: "DataMatJax") -> "DataMat":
+        """Rebuild a :class:`DataMat` from a :class:`DataMatJax` wrapper."""
+
+        return wrapper.to_datamat()
+
     # Unary operations
     @cached_property
     def inv(self):
@@ -824,6 +872,41 @@ class DataMat(pd.DataFrame):
             return utils.concat(d, axis=axis, names=toplevelname, **kwargs)
         else:
             return utils.concat(allobjs, axis=axis, **kwargs)
+
+
+@dataclass(frozen=True)
+class DataMatJax:
+    """PyTree wrapper coupling JAX arrays with DataMat metadata."""
+
+    values: JaxArray
+    index: pd.Index
+    columns: pd.Index
+
+    def tree_flatten(self) -> tuple[tuple[JaxArray], tuple[pd.Index, pd.Index]]:
+        return (self.values,), (self.index, self.columns)
+
+    @classmethod
+    def tree_unflatten(
+        cls, metadata: tuple[pd.Index, pd.Index], children: tuple[JaxArray]
+    ) -> "DataMatJax":
+        index, columns = metadata
+        (values,) = children
+        return cls(values=values, index=index, columns=columns)
+
+    def to_datamat(self) -> DataMat:
+        return DataMat(
+            self.values,
+            index=self.index.copy(),
+            columns=self.columns.copy(),
+        )
+
+
+if _JAX_AVAILABLE:  # pragma: no cover - depends on optional JAX
+    jax_tree_util.register_pytree_node(
+        DataMatJax,
+        lambda wrapper: wrapper.tree_flatten(),
+        DataMatJax.tree_unflatten,
+    )
 
 
 def get_names(dms, assign_missing=False):
