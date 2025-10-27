@@ -81,3 +81,6 @@ into concrete, repeatable checklists.
 ** <2025-10-24 Fri> Assistant (Codex CLI)
 - Initial version establishing operating principles, workflow, and reporting
   expectations for automated contributors.
+** <2025-10-27 Mon> Assistant (Codex CLI)
+- Added `make release-notes` and `scripts/generate_release_notes.py` so assistants can
+  produce GitHub release drafts directly from git history.

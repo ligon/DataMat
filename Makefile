@@ -24,7 +24,7 @@ else
 PYTEST_CMD = $(POETRY) run pytest
 endif
 
-.PHONY: lint black mypy test check quick-check release publish
+.PHONY: lint black mypy test check quick-check release publish release-notes
 
 lint:
 	$(POETRY) run ruff check .
@@ -72,3 +72,6 @@ publish: release
 	$(MAKE) README.md
 	$(POETRY) build
 	$(POETRY) publish --build --skip-existing --no-interaction
+
+release-notes:
+	$(POETRY) run python scripts/generate_release_notes.py $(ARGS)
