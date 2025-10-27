@@ -321,7 +321,40 @@ class DataVec(pd.Series):
         rng: RNGInput = None,
         **dist_kwargs: Any,
     ) -> "DataVec":
-        """Draw a random vector of given length."""
+        """Draw a random vector with optional labelled index.
+
+        Parameters
+        ----------
+        size : int
+            Length of the vector.
+        distribution : random-spec, default "normal"
+            Name/tuple/callable describing the distribution. Built-in shorthands:
+              - ``"normal"`` / ``"gaussian"`` (loc, scale)
+              - ``"uniform"`` (low, high)
+              - ``"chi2"`` / ``"chisquare"`` (df)
+              - ``"exponential"`` (scale)
+              - ``"bernoulli"`` (p)
+              - ``"binomial"`` (n, p)
+              - ``"poisson"`` (lam)
+              - ``"standard_normal"``
+            A tuple like ``("chi2", 3)`` maps to the appropriate parameters.
+            Custom callables must accept ``size=`` and return an array.
+        index : Sequence or pandas.Index, optional
+            Values for the index; defaults to 0..size-1.
+        idxnames : str or sequence of str, optional
+            Name(s) applied to the index levels.
+        name : str, optional
+            Vector name; defaults to an auto-generated ``vec_*`` identifier.
+        rng : numpy.random.Generator | int | None, optional
+            RNG or seed used by the draw (falls back to ``default_rng()``).
+        **dist_kwargs
+            Additional keyword arguments forwarded to the distribution.
+
+        Returns
+        -------
+        DataVec
+            Labelled random vector of shape ``(size,)``.
+        """
 
         values = _draw_random_array((size,), distribution, rng, **dist_kwargs)
 
@@ -582,7 +615,32 @@ class DataMat(pd.DataFrame):
         name: str | None = None,
         **dist_kwargs: Any,
     ) -> "DataMat":
-        """Draw a random matrix with optional labelled axes."""
+        """Draw a random matrix with optional labelled axes.
+
+        Parameters
+        ----------
+        shape : tuple[int, int]
+            Number of rows and columns.
+        distribution : random-spec, default "normal"
+            Name/tuple/callable describing the distribution. Supports the
+            same shorthands as :meth:`DataVec.random` (normal, uniform, chi-square,
+            exponential, Bernoulli, binomial, Poisson, etc.).
+        index, columns : sequence or pandas.Index, optional
+            Labels for rows/columns; defaults to simple RangeIndex.
+        idxnames, colnames : str or sequence of str, optional
+            Names applied to the index/column levels.
+        rng : numpy.random.Generator | int | None, optional
+            RNG or seed used by the draw.
+        name : str, optional
+            Matrix name.
+        **dist_kwargs
+            Additional keyword arguments forwarded to the distribution.
+
+        Returns
+        -------
+        DataMat
+            Labelled matrix of shape ``shape``.
+        """
 
         if len(shape) != 2:
             raise ValueError("Shape must be a tuple (rows, cols).")
