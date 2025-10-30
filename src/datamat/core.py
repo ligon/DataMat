@@ -814,8 +814,10 @@ class DataMat(pd.DataFrame):
             assign_missing = levelnames
             levelnames = True
 
+        dict_input = isinstance(other, dict)
+
         allobjs = []
-        if isinstance(other, dict):
+        if dict_input:
             allobjs = [self] + list(other.values())
             allnames = [self.name] + list(other.keys())
         else:
@@ -832,6 +834,8 @@ class DataMat(pd.DataFrame):
                 raise ValueError("Unexpected type")
 
             allnames = get_names(allobjs, assign_missing=assign_missing)
+
+        allobjs = _normalize_concat_objects(list(allobjs))
 
         # Have list of all names, but may not be unique.
 
@@ -862,6 +866,8 @@ class DataMat(pd.DataFrame):
                 allobjs[i] = obj
                 allcols += [obj.columns]
         cols = reconcile_indices(allcols, drop_vestigial_levels=drop_vestigial_levels)
+        if dict_input and axis == 1 and not levelnames:
+            cols = _apply_dict_keys_to_singleton_columns(cols, unique_names)
         for i in range(len(idxs)):
             allobjs[i].columns = cols[i]
 
@@ -999,6 +1005,41 @@ def reconcile_indices(idxs, fillvalue="", drop_vestigial_levels=False):
     return out
 
 
+def _normalize_concat_objects(objs: list[Any]) -> list[DataMat | DataVec]:
+    """Convert pandas structures into DataMat/DataVec for consistent handling."""
+    normalized: list[DataMat | DataVec] = []
+    for obj in objs:
+        if isinstance(obj, DataMat | DataVec):
+            normalized.append(obj)
+            continue
+        if isinstance(obj, pd.Series):
+            normalized.append(DataVec(obj))
+            continue
+        if isinstance(obj, pd.DataFrame):
+            normalized.append(DataMat(obj))
+            continue
+        normalized.append(obj)
+    return normalized
+
+
+def _apply_dict_keys_to_singleton_columns(
+    columns: list[pd.MultiIndex], keys: Sequence[str]
+) -> list[pd.MultiIndex]:
+    """Override singleton column entries with dictionary keys."""
+    adjusted = []
+    for key, column_index in zip(keys, columns, strict=False):
+        if len(column_index) == 1:
+            new_arrays = [np.repeat(key, len(column_index))]
+            for level in range(1, column_index.nlevels):
+                new_arrays.append(column_index.get_level_values(level))
+            adjusted.append(
+                pd.MultiIndex.from_arrays(new_arrays, names=column_index.names)
+            )
+        else:
+            adjusted.append(column_index)
+    return adjusted
+
+
 def concat(
     dms,
     axis=0,
@@ -1032,8 +1073,10 @@ def concat(
         assign_missing = levelnames
         levelnames = True
 
+    dict_input = isinstance(dms, dict)
+
     allobjs = []
-    if isinstance(dms, dict):
+    if dict_input:
         allobjs = list(dms.values())
         allnames = list(dms.keys())
     else:
@@ -1048,6 +1091,8 @@ def concat(
             raise ValueError("Unexpected type")
 
         allnames = get_names(allobjs, assign_missing=assign_missing)
+
+    allobjs = _normalize_concat_objects(list(allobjs))
 
     # Have list of all names, but may not be unique.
 
@@ -1078,16 +1123,51 @@ def concat(
             allobjs[i] = obj
             allcols += [obj.columns]
     cols = reconcile_indices(allcols)
+    if dict_input and axis == 1 and not levelnames:
+        cols = _apply_dict_keys_to_singleton_columns(cols, unique_names)
     for i in range(len(idxs)):
         allobjs[i].columns = cols[i]
 
     # Now have a list of unique names, build a dictionary
     d = dict(zip(unique_names, allobjs, strict=False))
 
-    if levelnames:
-        return utils.concat(d, axis=axis, names=toplevelname, **kwargs)
+    if axis is None:
+        axis_number = 0
+    elif isinstance(axis, str):
+        axis_lower = axis.lower()
+        if axis_lower in {"columns", "column", "col"}:
+            axis_number = 1
+        else:
+            axis_number = 0
     else:
-        return utils.concat(allobjs, axis=axis, **kwargs)
+        axis_number = int(axis)
+
+    if levelnames:
+        result = utils.concat(d, axis=axis, names=toplevelname, **kwargs)
+    else:
+        result = utils.concat(allobjs, axis=axis, **kwargs)
+
+    if axis_number == 1:
+        if isinstance(result, DataMat):
+            return result
+        if isinstance(result, pd.DataFrame):
+            return DataMat(result)
+        if isinstance(result, pd.Series):
+            return DataMat(result.to_frame())
+        return DataMat(pd.DataFrame(result))
+
+    # axis==0: favour returning a DataVec when result collapses to a single column
+    if isinstance(result, DataVec):
+        return result
+    if isinstance(result, pd.Series):
+        return DataVec(result)
+    if isinstance(result, pd.DataFrame):
+        if result.shape[1] == 1:
+            series = result.iloc[:, 0].copy()
+            series.name = result.columns[0]
+            return DataVec(series)
+        return DataMat(result)
+    return result
 
 
 def read_parquet(fn, **kwargs):
