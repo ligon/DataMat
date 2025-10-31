@@ -815,6 +815,7 @@ class DataMat(pd.DataFrame):
             levelnames = True
 
         dict_input = isinstance(other, dict)
+        axis_number = _normalize_axis_arg(axis)
 
         allobjs = []
         if dict_input:
@@ -866,8 +867,8 @@ class DataMat(pd.DataFrame):
                 allobjs[i] = obj
                 allcols += [obj.columns]
         cols = reconcile_indices(allcols, drop_vestigial_levels=drop_vestigial_levels)
-        if dict_input and axis == 1 and not levelnames:
-            cols = _apply_dict_keys_to_singleton_columns(cols, unique_names)
+        if axis_number == 1 and not levelnames:
+            cols = _apply_names_to_singleton_columns(cols, unique_names)
         for i in range(len(idxs)):
             allobjs[i].columns = cols[i]
 
@@ -1022,10 +1023,22 @@ def _normalize_concat_objects(objs: list[Any]) -> list[DataMat | DataVec]:
     return normalized
 
 
-def _apply_dict_keys_to_singleton_columns(
+def _normalize_axis_arg(axis: Any) -> int:
+    """Return normalized axis as 0 (index) or 1 (columns)."""
+    if axis is None:
+        return 0
+    if isinstance(axis, str):
+        axis_lower = axis.lower()
+        if axis_lower in {"columns", "column", "col"}:
+            return 1
+        return 0
+    return int(axis)
+
+
+def _apply_names_to_singleton_columns(
     columns: list[pd.MultiIndex], keys: Sequence[str]
 ) -> list[pd.MultiIndex]:
-    """Override singleton column entries with dictionary keys."""
+    """Override singleton column entries with provided names."""
     adjusted = []
     for key, column_index in zip(keys, columns, strict=False):
         if len(column_index) == 1:
@@ -1106,6 +1119,8 @@ def concat(
         else:
             unique_names.append(name + next(suffix))
 
+    axis_number = _normalize_axis_arg(axis)
+
     # Reconcile indices so they all have common named levels.
     idxs = reconcile_indices(
         [obj.index for obj in allobjs], drop_vestigial_levels=drop_vestigial_levels
@@ -1123,24 +1138,13 @@ def concat(
             allobjs[i] = obj
             allcols += [obj.columns]
     cols = reconcile_indices(allcols)
-    if dict_input and axis == 1 and not levelnames:
-        cols = _apply_dict_keys_to_singleton_columns(cols, unique_names)
+    if axis_number == 1 and not levelnames:
+        cols = _apply_names_to_singleton_columns(cols, unique_names)
     for i in range(len(idxs)):
         allobjs[i].columns = cols[i]
 
     # Now have a list of unique names, build a dictionary
     d = dict(zip(unique_names, allobjs, strict=False))
-
-    if axis is None:
-        axis_number = 0
-    elif isinstance(axis, str):
-        axis_lower = axis.lower()
-        if axis_lower in {"columns", "column", "col"}:
-            axis_number = 1
-        else:
-            axis_number = 0
-    else:
-        axis_number = int(axis)
 
     if levelnames:
         result = utils.concat(d, axis=axis, names=toplevelname, **kwargs)

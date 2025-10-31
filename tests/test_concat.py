@@ -36,6 +36,18 @@ def test_concat_accepts_pandas_series_horizontal():
     assert list(result.iloc[:, 1]) == [2, 3]
 
 
+def test_concat_list_assigns_suffix_for_duplicate_names():
+    a = DataVec([1, 2], name="a")
+    b = a + 1
+
+    result = dm.concat([a, b], axis=1)
+
+    assert isinstance(result, DataMat)
+    assert list(result.columns.get_level_values(0)) == ["a", "a_0"]
+    assert list(result.iloc[:, 0]) == [1, 2]
+    assert list(result.iloc[:, 1]) == [2, 3]
+
+
 def test_concat_accepts_pandas_series_vertical():
     c = pd.Series([1, 2], name="c")
     d = c + 1
