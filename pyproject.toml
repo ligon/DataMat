@@ -2,7 +2,7 @@
 name = "datamat"
 version = "0.2.0a1"
 description = "Matrix Operations on Data Arrays"
-readme = "README.md"
+readme = "README.org"
 license = "CC-BY-NC-SA-4.0"
 authors = ["Ethan Ligon <ligon@berkeley.edu>"]
 packages = [{ include = "datamat", from = "src" }]
