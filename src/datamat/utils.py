@@ -155,7 +155,15 @@ def use_indices(df, idxnames):
 
 
 def drop_vestigial_levels(idx, axis=0, both=False, multiindex=True):
-    """Drop index/column levels that do not vary."""
+    """Drop index/column levels that do not vary.
+
+    "Vestigial" means: the level contains exactly one *used* value. A
+    MultiIndex can carry stale declared categories that are not used by
+    any row (e.g. after a boolean filter), so the first step is always
+    ``remove_unused_levels()``; afterwards, ``len(level) == 1`` is the
+    single canonical test for vestigiality. This is the same definition
+    used by :func:`datamat.core.reconcile_indices`.
+    """
     if both:
         return drop_vestigial_levels(
             drop_vestigial_levels(idx, axis=1), multiindex=multiindex
@@ -172,19 +180,20 @@ def drop_vestigial_levels(idx, axis=0, both=False, multiindex=True):
     else:
         humpty_dumpty = False
 
-    try:
+    if isinstance(idx, pd.MultiIndex):
+        # Drop stale categories so "vestigial" can be answered uniformly by
+        # inspecting declared levels alone.
+        idx = idx.remove_unused_levels()
         level = 0
-        n_levels = len(idx.levels)
-        while level < n_levels:
-            if len(set(idx.codes[level])) <= 1:
+        while level < len(idx.levels):
+            if len(idx.levels[level]) <= 1:
                 idx = idx.droplevel(level)
-                n_levels -= 1
+                # idx may collapse from MultiIndex to Index when one level
+                # remains — at that point there's nothing more to drop.
+                if not isinstance(idx, pd.MultiIndex):
+                    break
             else:
                 level += 1
-                if level >= n_levels:
-                    break
-    except AttributeError:
-        pass
 
     if multiindex and not isinstance(idx, pd.MultiIndex):
         idx = pd.MultiIndex.from_tuples(idx.str.split("|").tolist(), names=[idx.name])

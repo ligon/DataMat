@@ -1005,7 +1005,11 @@ def reconcile_indices(idxs, fillvalue="", drop_vestigial_levels=False):
         # ``x.names[i]`` to dereference a shrunk FrozenList and raise
         # IndexError once two or more vestigial levels were dropped).
         droppednames: dict[Any, Any] = {}
-        if drop_vestigial_levels and hasattr(x, "levels"):
+        if drop_vestigial_levels and isinstance(x, pd.MultiIndex):
+            # Normalise stale declared categories so "vestigial" is decided
+            # by used-value count alone — same definition as
+            # :func:`datamat.utils.drop_vestigial_levels`.
+            x = x.remove_unused_levels()
             vestigial = [
                 (n, level[0])
                 for n, level in zip(x.names, x.levels, strict=True)
