@@ -232,8 +232,8 @@ class DataVec(pd.Series):
         if idxnames is None:
             idxnames = list(self.index.names)
             it = 0
-            for i, name in enumerate(idxnames):
-                if name is None:
+            for i, lvl_name in enumerate(idxnames):
+                if lvl_name is None:
                     idxnames[i] = f"_{it:d}"
                     it += 1
         elif isinstance(idxnames, str):
@@ -479,8 +479,8 @@ class DataMat(pd.DataFrame):
         if idxnames is None:
             idxnames = list(self.index.names)
             it = 0
-            for i, name in enumerate(idxnames):
-                if name is None:
+            for i, lvl_name in enumerate(idxnames):
+                if lvl_name is None:
                     idxnames[i] = f"_{it:d}"
                     it += 1
         elif isinstance(idxnames, str):
@@ -491,8 +491,8 @@ class DataMat(pd.DataFrame):
         if colnames is None:
             colnames = list(self.columns.names)
             it = 0
-            for i, name in enumerate(colnames):
-                if name is None:
+            for i, lvl_name in enumerate(colnames):
+                if lvl_name is None:
                     colnames[i] = f"_{it:d}"
                     it += 1
         elif isinstance(colnames, str):
@@ -509,9 +509,9 @@ class DataMat(pd.DataFrame):
         rather than the more confusing ``KeyError: ('missing',)`` from
         the retry attempt.
 
-        >>> X = DataMat([[1,2,3],[4,5,6]],colnames='cols',idxnames='rows')
-        >>> X[0].sum().squeeze()==5
-        True
+        >>> X = DataMat([[1,2],[3,4]], columns=['a','b'], colnames='c')
+        >>> X['a'].values.flatten().tolist()
+        [1, 3]
         """
         try:
             return pd.DataFrame.__getitem__(self, key)
@@ -526,6 +526,10 @@ class DataMat(pd.DataFrame):
     def set_index(self, columns, levels=None, inplace=False):
         """Set the DataMat index using existing columns.
 
+        ``levels`` is the name(s) to apply to the resulting index levels
+        (passed through to ``index.names``). It defaults to ``columns``;
+        a bare string is wrapped to a 1-tuple either way.
+
         >>> X = DataMat([[1,2,3],[4,5,6]],columns=['a','b','c'],colnames='cols',idxnames='rows')
         >>> X.set_index(['a','b'])
         """
@@ -537,8 +541,11 @@ class DataMat(pd.DataFrame):
 
         if levels is None:
             levels = columns
-            if isinstance(levels, str):
-                levels = (levels,)
+        # Wrap a bare string regardless of branch: ``frame.index.names = "foo"``
+        # raises, but the previous version only wrapped when levels defaulted
+        # from columns.
+        if isinstance(levels, str):
+            levels = (levels,)
 
         try:
             frame.index = pd.MultiIndex.from_frame(
@@ -637,9 +644,24 @@ class DataMat(pd.DataFrame):
         return np.trace(self)
 
     def dg(self):
-        """Return the diagonal vector diag(M) of a square matrix."""
+        """Return the diagonal vector diag(M) of a square matrix.
 
-        assert np.all(self.index == self.columns), "Should have columns same as index."
+        Raises ``ValueError`` if ``self.index`` and ``self.columns`` do not
+        match (shape or labels), with a clearer message than the
+        ``ValueError`` that would otherwise come out of an elementwise
+        comparison with mismatched ``nlevels``.
+        """
+        if self.shape[0] != self.shape[1]:
+            raise ValueError(
+                f"DataMat.dg() requires a square matrix; got shape {self.shape}."
+            )
+        if self.index.nlevels != self.columns.nlevels or not np.all(
+            self.index == self.columns
+        ):
+            raise ValueError(
+                "DataMat.dg() requires index and columns to be identical "
+                "(same nlevels and same labels)."
+            )
         return DataVec(np.diag(self.values), index=self.index)
 
     def leverage(self):
@@ -1317,7 +1339,13 @@ def generalized_eig(A, B):
     eigvals = eigvals[::-1]  # Biggest eigenvalues first
     eigvecs = eigvecs[:, ::-1]
 
-    assert np.all(np.abs((A - eigvals[0] * B) @ eigvecs[:, 0]) < 1e-10)
+    # Sanity check the leading eigenpair via the defining identity
+    # ``A v = λ B v``. Use ``np.allclose`` (relative + absolute tol) instead
+    # of a fixed 1e-10 absolute bound so the check scales with ‖A‖ and ‖B‖.
+    residual = (A - eigvals[0] * B) @ eigvecs[:, 0]
+    assert np.allclose(
+        residual, 0.0, atol=1e-10, rtol=1e-8
+    ), "generalized_eig: leading eigenpair fails A v = lambda B v."
 
     eigvecs = DataMat(eigvecs, index=A.index)
     eigvals = DataVec(eigvals)
