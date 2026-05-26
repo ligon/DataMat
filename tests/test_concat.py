@@ -57,7 +57,24 @@ def test_concat_accepts_pandas_series_vertical():
     assert isinstance(result, DataVec)
     assert list(result.index.get_level_values(0)) == [0, 1, 0, 1]
     assert list(result.values) == [1, 2, 2, 3]
-    assert result.name == ("c",)
+    # 1-element tuple names get unwrapped to the bare scalar (matches
+    # matmul's existing behaviour). A 2-level singleton column would
+    # still yield a 2-tuple — see test_concat_axis0_keeps_multilevel_name.
+    assert result.name == "c"
+
+
+def test_concat_axis0_keeps_multilevel_name():
+    """Sanity-check the other side of ``_unwrap_scalar_name``: a 2-level
+    column index on the single-column collapse should *not* be flattened,
+    because the tuple carries real structure."""
+    mi = pd.MultiIndex.from_tuples([("A", "x")], names=["outer", "inner"])
+    M = dm.DataMat([[1], [2]], columns=mi, idxnames="i")
+    N = dm.DataMat([[3], [4]], columns=mi, idxnames="i")
+
+    result = dm.concat([M, N], axis=0)
+
+    assert isinstance(result, DataVec)
+    assert result.name == ("A", "x")
 
 
 def test_concat_drop_vestigial_levels_parity_module_vs_method():

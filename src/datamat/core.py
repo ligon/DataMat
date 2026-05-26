@@ -176,6 +176,21 @@ def _fresh_vec_name(prefix: str = "vec") -> str:
     return prefix if suffix == 0 else f"{prefix}_{suffix}"
 
 
+def _unwrap_scalar_name(name: Any) -> Any:
+    """Unwrap a single-element tuple name to its bare scalar.
+
+    DataMat columns are always wrapped to a MultiIndex, so a 1-level
+    column index yields tuple keys like ``('c',)``. When such a column
+    is the only one in a single-column collapse (matmul on a (n, 1)
+    operand, axis=0 concat that collapses to one column, etc.), the
+    surrounding scalar is what users expect on ``DataVec.name``. Leave
+    multi-level tuples alone — those carry real structure.
+    """
+    if isinstance(name, tuple) and len(name) == 1:
+        return name[0]
+    return name
+
+
 class DataVec(pd.Series):
     """Column vector with labeled index for linear-algebra operations."""
 
@@ -837,9 +852,7 @@ class DataMat(pd.DataFrame):
                 series = (
                     Y if isinstance(Y, pd.Series) else pd.Series(Y, index=self.index)
                 )
-                name = other.name
-                if isinstance(name, tuple) and len(name) == 1:
-                    name = name[0]
+                name = _unwrap_scalar_name(other.name)
                 if name is None:
                     name = _fresh_vec_name()
                 series.name = name
@@ -853,9 +866,7 @@ class DataMat(pd.DataFrame):
             else:
                 column_series = Y
             column_series = column_series.copy()
-            name = other.columns[0]
-            if isinstance(name, tuple) and len(name) == 1:
-                name = name[0]
+            name = _unwrap_scalar_name(other.columns[0])
             column_series.name = name
             return DataVec(column_series, idxnames=self.index.names, name=name)
 
@@ -1215,7 +1226,7 @@ def _finish_concat(
     if isinstance(result, pd.DataFrame):
         if result.shape[1] == 1:
             series = result.iloc[:, 0].copy()
-            series.name = result.columns[0]
+            series.name = _unwrap_scalar_name(result.columns[0])
             return DataVec(series)
         return DataMat(result)
     return result
