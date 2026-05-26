@@ -921,8 +921,10 @@ class DataMat(pd.DataFrame):
         for i in range(len(idxs)):
             allobjs[i].columns = cols[i]
 
-        # Now have a list of unique names, build a dictionary
-        d = dict(zip(unique_names, allobjs, strict=False))
+        # Now have a list of unique names, build a dictionary. ``strict=True``
+        # because ``unique_names`` is built one-per-object above; any length
+        # mismatch here would indicate a bug in that construction.
+        d = dict(zip(unique_names, allobjs, strict=True))
 
         if levelnames:
             return utils.concat(d, axis=axis, names=toplevelname, **kwargs)
@@ -1097,9 +1099,13 @@ def _normalize_axis_arg(axis: Any) -> int:
 def _apply_names_to_singleton_columns(
     columns: list[pd.MultiIndex], keys: Sequence[str]
 ) -> list[pd.MultiIndex]:
-    """Override singleton column entries with provided names."""
+    """Override singleton column entries with provided names.
+
+    Callers must supply one key per column index; ``strict=True`` makes a
+    length mismatch fail loudly rather than silently dropping the tail.
+    """
     adjusted = []
-    for key, column_index in zip(keys, columns, strict=False):
+    for key, column_index in zip(keys, columns, strict=True):
         if len(column_index) == 1:
             new_arrays = [np.repeat(key, len(column_index))]
             for level in range(1, column_index.nlevels):
@@ -1202,8 +1208,9 @@ def concat(
     for i in range(len(idxs)):
         allobjs[i].columns = cols[i]
 
-    # Now have a list of unique names, build a dictionary
-    d = dict(zip(unique_names, allobjs, strict=False))
+    # Now have a list of unique names, build a dictionary. ``strict=True``:
+    # see the analogous site in ``DataMat.concat`` for the invariant.
+    d = dict(zip(unique_names, allobjs, strict=True))
 
     if levelnames:
         result = utils.concat(d, axis=axis, names=toplevelname, **kwargs)

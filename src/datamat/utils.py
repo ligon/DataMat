@@ -344,7 +344,10 @@ def dummies(df, cols, suffix=False):
         v = df[colcols]
 
     usecols = [v[s].squeeze() for s in idxcols + colcols]
-    tuples = pd.Series(list(zip(*usecols, strict=False)), index=v.index)
+    # All ``usecols`` entries are slices of the same DataFrame ``v`` and
+    # therefore share its row count; ``strict=True`` makes any future
+    # divergence loud rather than silently zipping the shortest.
+    tuples = pd.Series(list(zip(*usecols, strict=True)), index=v.index)
 
     v = get_dummies(tuples).astype(int)
 
