@@ -1,6 +1,5 @@
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from functools import cached_property
 from itertools import count
 from typing import TYPE_CHECKING, Any, TypeAlias, cast
 
@@ -567,8 +566,13 @@ class DataMat(pd.DataFrame):
         return wrapper.to_datamat()
 
     # Unary operations
-    @cached_property
     def inv(self):
+        """Matrix inverse :math:`M^{-1}`.
+
+        Computed fresh on each call: caching is unsafe because DataMat is a
+        mutable pandas subclass and a cached value would not be invalidated
+        by in-place edits to ``self``.
+        """
         return DataMat(matrix_inv(self))
 
     def norm(self, ord=None, **kwargs):
@@ -576,12 +580,12 @@ class DataMat(pd.DataFrame):
 
         return np.linalg.norm(self, ord, **kwargs)
 
-    @cached_property
     def det(self):
+        """Matrix determinant ``det(M)`` (fresh each call; see :meth:`inv`)."""
         return np.linalg.det(self)
 
-    @cached_property
     def trace(self):
+        """Sum of diagonal entries ``tr(M)`` (fresh each call; see :meth:`inv`)."""
         return np.trace(self)
 
     def dg(self):
@@ -590,11 +594,13 @@ class DataMat(pd.DataFrame):
         assert np.all(self.index == self.columns), "Should have columns same as index."
         return DataVec(np.diag(self.values), index=self.index)
 
-    @cached_property
     def leverage(self):
-        """Return leverage of matrix (diagonal of projection matrix).
+        """Diagonal of the projection (hat) matrix for design ``self``.
 
-        >>> DataMat([[1,2],[3,4],[5,6]],idxnames='i').leverage()
+        Fresh each call; see :meth:`inv` for the reason caching is unsafe.
+
+        >>> DataMat([[1,2],[3,4],[5,6]],idxnames='i').leverage()  # doctest: +ELLIPSIS
+        0  0    ...
         """
         return utils.leverage(self)
 
@@ -626,9 +632,12 @@ class DataMat(pd.DataFrame):
     def cholesky(self):
         return DataMat(utils.cholesky(self))
 
-    @cached_property
     def pinv(self):
-        """Moore-Penrose pseudo-inverse."""
+        """Moore-Penrose pseudo-inverse :math:`M^{+}`.
+
+        Computed fresh on each call; see :meth:`inv` for the reason caching
+        is unsafe on a mutable pandas subclass.
+        """
         return DataMat(matrix_pinv(self))
 
     def triu(self, k: int = 0):
@@ -1250,8 +1259,8 @@ def canonical_variates(X, Y):
     S12 = U1.T @ U2 / T
     S21 = S12.T
 
-    eigvals, M = generalized_eig(S21 @ S11.inv @ S12, S22)
-    eigvals_alt, L = generalized_eig(S12 @ S22.inv @ S21, S11)
+    eigvals, M = generalized_eig(S21 @ S11.inv() @ S12, S22)
+    eigvals_alt, L = generalized_eig(S12 @ S22.inv() @ S21, S11)
 
     assert np.allclose(eigvals[:m], eigvals_alt[:m])
 
@@ -1284,6 +1293,6 @@ def reduced_rank_regression(X, Y, r):
     U, rho, Vt = ((C @ Y.T @ (Y.proj(X))) @ C).svd()
     V = Vt.T
 
-    Br = X.lstsq(Y @ V.iloc[:, :r]) @ V.iloc[:, :r].pinv
+    Br = X.lstsq(Y @ V.iloc[:, :r]) @ V.iloc[:, :r].pinv()
 
     return Br
