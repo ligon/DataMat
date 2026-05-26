@@ -875,14 +875,15 @@ class DataMat(pd.DataFrame):
                 allobjs = [self] + list(other)
             elif isinstance(other, DataMat | DataVec):
                 allobjs = [self, other]
-                allnames = [self.name] + get_names(
-                    [other], assign_missing=assign_missing
-                )
             elif isinstance(other, list):
                 allobjs = [self] + other
             else:
                 raise ValueError("Unexpected type")
 
+            # ``allnames`` is derived from the assembled ``allobjs`` here;
+            # the per-branch assignment that used to exist for the
+            # ``DataMat | DataVec`` case was unconditionally overwritten by
+            # this line and so was dead code.
             allnames = get_names(allobjs, assign_missing=assign_missing)
 
         allobjs = _normalize_concat_objects(list(allobjs))
@@ -1173,12 +1174,14 @@ def concat(
             allobjs = list(dms)
         elif isinstance(dms, DataMat | DataVec):
             allobjs = [dms]
-            allnames = get_names([dms], assign_missing=assign_missing)
         elif isinstance(dms, list):
             allobjs = dms
         else:
             raise ValueError("Unexpected type")
 
+        # ``allnames`` is derived from the assembled ``allobjs`` here; the
+        # per-branch assignment for the ``DataMat | DataVec`` case was dead
+        # code (unconditionally overwritten by this line).
         allnames = get_names(allobjs, assign_missing=assign_missing)
 
     allobjs = _normalize_concat_objects(list(allobjs))
