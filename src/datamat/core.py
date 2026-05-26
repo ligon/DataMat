@@ -276,19 +276,28 @@ class DataVec(pd.Series):
         return DataMat(np.outer(self, other), index=self.index, columns=other.index)
 
     def proj(self, other):
-        """Projection of self on other."""
+        """Projection of self onto the column space of ``other``.
+
+        Accepts either a DataMat (multi-dimensional basis) or a DataVec
+        (single regressor). The DataVec path previously raised
+        AttributeError because the helper referenced ``.columns`` on a
+        Series.
+        """
+        if isinstance(other, DataVec):
+            other = DataMat(other.to_frame())
         b = other.lstsq(self)
         return other @ b
 
     def lstsq(self, other):
-        rslt = np.linalg.lstsq(self, other, rcond=None)
+        """Least-squares fit of ``other`` on ``self`` as a single regressor.
 
-        if len(rslt[0].shape) < 2 or rslt[0].shape[1] == 1:
-            b = DataVec(rslt[0], index=self.columns)
-        else:
-            b = DataMat(rslt[0], index=self.columns, columns=other.columns)
-
-        return b
+        Delegates to :meth:`DataMat.lstsq` after upcasting ``self`` to a
+        single-column matrix. The previous implementation referenced
+        ``self.columns`` (which does not exist on a Series); reaching that
+        line was masked by an upstream LinAlgError, so the bug was dead
+        code, but the contract was broken.
+        """
+        return DataMat(self.to_frame()).lstsq(other)
 
     def resid(self, other):
         """Residual from projection of self on other."""
@@ -785,7 +794,14 @@ class DataMat(pd.DataFrame):
         return b
 
     def proj(self, other):
-        """Linear projection of self on other."""
+        """Linear projection of self onto the column space of ``other``.
+
+        Accepts either a DataMat (multi-dimensional basis) or a DataVec
+        (single regressor); the DataVec is upcast to a single-column
+        matrix so the standard lstsq path can be reused.
+        """
+        if isinstance(other, DataVec):
+            other = DataMat(other.to_frame())
         b = other.lstsq(self)
         return other @ b
 
