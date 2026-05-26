@@ -12,15 +12,18 @@ This file pins the supported combinations:
 For each: shape sanity, value equality with ``np.kron``, and (where
 applicable) label preservation.
 
-Note: the code path for *2-D* non-DataFrame operands silently
-reshapes them to column vectors via ``.reshape((-1, 1))``, which
-produces a different result from the mathematical Kronecker product.
-A regression test for that case is intentionally absent; see the
-corresponding follow-up task.
+The mixed-type code path (DataFrame × non-DataFrame) only carries
+enough metadata to handle a vector — a 2-D non-DataFrame operand
+with more than one column is rejected explicitly. The previous
+implementation silently flattened it and either produced a wrong
+result or raised a confusing pandas length-mismatch.
 """
 
 import numpy as np
 import pandas as pd
+import pytest
+
+import datamat as dm
 from datamat import utils
 
 
@@ -148,3 +151,36 @@ def test_kron_with_1x1_identity_is_identity():
     out = utils.kron(A, eye1)
 
     np.testing.assert_array_equal(out.values, A.values)
+
+
+# ---------------------------------------------------------------------------
+# Reject 2-D non-DataFrame operands (#25)
+# ---------------------------------------------------------------------------
+
+
+def test_kron_rejects_2d_array_on_B_side():
+    A = dm.DataMat(np.eye(2), idxnames="i", colnames="j")
+    B_2d = np.array([[1.0, 2.0], [3.0, 4.0]])  # (2, 2)
+
+    with pytest.raises(ValueError, match="non-DataFrame B operand"):
+        A.kron(B_2d)
+
+
+def test_kron_rejects_2d_array_on_A_side():
+    A_2d = np.array([[1.0, 2.0], [3.0, 4.0]])
+    B = dm.DataMat(np.eye(2), idxnames="i", colnames="j")
+
+    with pytest.raises(ValueError, match="non-DataFrame A operand"):
+        utils.kron(A_2d, B)
+
+
+def test_kron_accepts_column_vector_2d_array():
+    """A 2-D array with a single column is the documented column-vector
+    shorthand and must still work."""
+    A = _df(np.arange(4).reshape(2, 2).astype(float), "ai", "aj")
+    b = np.array([[10.0], [20.0]])  # (2, 1)
+
+    out = utils.kron(A, b)
+
+    expected = np.kron(A.values, b)
+    np.testing.assert_array_equal(out.values, expected)

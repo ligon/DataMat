@@ -313,8 +313,42 @@ def _check_level_name_collision(left_names, right_names, axis):
         )
 
 
+def _require_vector_operand(arr: Any, label: str) -> np.ndarray:
+    """Reject 2-D non-DataFrame operands with more than one column.
+
+    The mixed-type kron paths (DataFrame × array, array × DataFrame)
+    reshape the non-DataFrame operand to ``(-1, 1)`` — they only carry
+    enough metadata to handle a vector. Passing a wider 2-D array
+    previously raised a confusing pandas length-mismatch from deep
+    inside ``pd.DataFrame.__init__``; we now reject it explicitly with
+    a message that points at the supported alternatives.
+    """
+    arr_np = np.asarray(arr)
+    if arr_np.ndim == 2 and arr_np.shape[1] > 1:
+        raise ValueError(
+            f"kron: non-DataFrame {label} operand has shape {arr_np.shape}; "
+            "the mixed-type code path only supports scalars, 1-D vectors, "
+            "or single-column 2-D arrays on the non-DataFrame side. Wrap as "
+            "a DataFrame / DataMat to use full Kronecker semantics with "
+            "label propagation."
+        )
+    return arr_np
+
+
 def kron(A, B, sparse=False):
-    """Kronecker product that preserves pandas index/column metadata."""
+    """Kronecker product that preserves pandas index/column metadata.
+
+    Supported operand shapes:
+
+      - DataFrame × DataFrame: full label propagation on both axes.
+      - DataFrame × (scalar | 1-D | n×1 array): A's labels propagate;
+        the array side contributes an unnamed level on the index axis.
+      - (scalar | 1-D | n×1 array) × DataFrame: symmetric.
+      - array × array: no labels, equivalent to ``np.kron``.
+
+    A 2-D non-DataFrame operand with more than one column is rejected
+    with a clear ``ValueError`` — see :func:`_require_vector_operand`.
+    """
     if sparse:
         from scipy.sparse import kron as sparse_kron
 
@@ -333,14 +367,14 @@ def kron(A, B, sparse=False):
                 if hasattr(A.columns, "remove_unused_levels")
                 else A.columns
             )
-            b = np.asarray(B).reshape((-1, 1))
+            b = _require_vector_operand(B, "B").reshape((-1, 1))
     elif isinstance(B, pd.DataFrame):
         columns = (
             B.columns.remove_unused_levels()
             if hasattr(B.columns, "remove_unused_levels")
             else B.columns
         )
-        a = np.asarray(A).reshape((-1, 1))
+        a = _require_vector_operand(A, "A").reshape((-1, 1))
         b = B.values
     else:
         a = np.asarray(A)
