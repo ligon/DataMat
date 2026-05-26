@@ -23,3 +23,8 @@ poetry.lock
 .DS_Store
 Thumbs.db
 .claude/
+
+# Coverage artifacts
+.coverage
+htmlcov/
+coverage.xml
