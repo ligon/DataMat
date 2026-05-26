@@ -1099,7 +1099,18 @@ def _normalize_axis_arg(axis: Any) -> int:
 def _apply_names_to_singleton_columns(
     columns: list[pd.MultiIndex], keys: Sequence[str]
 ) -> list[pd.MultiIndex]:
-    """Override singleton column entries with provided names.
+    """Rebrand the top-level *value* on each single-entry column index.
+
+    "Singleton" here means *one column entry*, not "one level": for each
+    pair ``(key, column_index)`` where ``len(column_index) == 1``, replace
+    the value at level 0 with ``key``. Lower-level values and *all* level
+    names are preserved.
+
+    Multi-entry column indices (``len(column_index) > 1``) pass through
+    unchanged. This is used by ``concat`` (horizontal, without a new
+    level header) to give a converted-from-DataVec single column its
+    owner's name instead of the synthetic placeholder produced by
+    :func:`_normalize_concat_objects`.
 
     Callers must supply one key per column index; ``strict=True`` makes a
     length mismatch fail loudly rather than silently dropping the tail.
