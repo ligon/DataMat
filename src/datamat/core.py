@@ -1424,11 +1424,26 @@ def reduced_rank_regression(X, Y, r):
     X = X - muX
     Y = Y - muY
 
-    C = utils.sqrtm(Y.cov())
+    # ``utils.sqrtm`` returns a plain ``pd.DataFrame``, so going through
+    # the DataMat method wraps the result back into a DataMat — needed
+    # so the matmul chain below produces a DataMat all the way through
+    # and the final ``.svd()`` resolves to our wrapper, not pandas'
+    # missing attribute.
+    C = Y.cov().sqrtm()
 
     U, rho, Vt = ((C @ Y.T @ (Y.proj(X))) @ C).svd()
     V = Vt.T
 
-    Br = X.lstsq(Y @ V.iloc[:, :r]) @ V.iloc[:, :r].pinv()
+    # ``Y @ V.iloc[:, :r]`` and ``X.lstsq(...)`` will both collapse to a
+    # DataVec when r == 1 (matmul / lstsq auto-collapse single-column
+    # results). The back-transformation needs them as 2-D matrices, so
+    # promote any DataVec back to a single-column DataMat.
+    Vr = V.iloc[:, :r]
+    Z = Y @ Vr
+    if isinstance(Z, DataVec):
+        Z = DataMat(Z.to_frame())
+    b = X.lstsq(Z)
+    if isinstance(b, DataVec):
+        b = DataMat(b.to_frame())
 
-    return Br
+    return b @ Vr.pinv()
