@@ -305,9 +305,17 @@ def kron(A, B, sparse=False):
 
 
 def dummies(df, cols, suffix=False):
-    """Construct indicator variables for combinations of ``cols``."""
-    idxcols = list(set(df.index.names).intersection(cols))
-    colcols = list(set(cols).difference(idxcols))
+    """Construct indicator variables for combinations of ``cols``.
+
+    The order of ``cols`` is preserved in the resulting column level names
+    and column tuples. Previously ``list(set(...))`` was used internally,
+    which made the output column ordering depend on Python's hash seed.
+    """
+    # Preserve input order; previously used set arithmetic which broke
+    # reproducibility across PYTHONHASHSEEDs.
+    index_names = list(df.index.names)
+    idxcols = [c for c in cols if c in index_names]
+    colcols = [c for c in cols if c not in idxcols]
 
     if len(idxcols):
         idx = use_indices(df, idxcols)
