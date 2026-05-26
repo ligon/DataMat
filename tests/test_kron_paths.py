@@ -19,11 +19,10 @@ implementation silently flattened it and either produced a wrong
 result or raised a confusing pandas length-mismatch.
 """
 
+import datamat as dm
 import numpy as np
 import pandas as pd
 import pytest
-
-import datamat as dm
 from datamat import utils
 
 
