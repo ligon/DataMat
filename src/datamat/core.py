@@ -199,6 +199,23 @@ class DataVec(pd.Series):
         if data is not None:
             try:
                 if len(data.shape) == 2 and 1 in data.shape:
+                    # A (1, n) pandas DataFrame is ambiguous: ``.squeeze()``
+                    # would silently re-key the resulting vector by columns
+                    # and drop the row label. Refuse rather than guess.
+                    if (
+                        isinstance(data, pd.DataFrame)
+                        and data.shape[0] == 1
+                        and data.shape[1] > 1
+                    ):
+                        raise ValueError(
+                            "Cannot infer DataVec orientation from a (1, n) "
+                            "DataFrame with n > 1: squeezing would key by "
+                            "columns and drop the row label "
+                            f"{data.index.tolist()!r}. Pass ``data.iloc[0]`` "
+                            "(to take the row as a Series indexed by columns) "
+                            "or ``data.T.iloc[:, 0]`` (to transpose first) to "
+                            "make the intent explicit."
+                        )
                     data = data.squeeze()
             except AttributeError:
                 pass
