@@ -244,14 +244,25 @@ class DataVec(pd.Series):
     def __getitem__(self, key):
         """v.__getitem__(k) == v[k]
 
+        For a DataVec whose index is a MultiIndex, a bare scalar key
+        (e.g. ``v['a']``) is automatically wrapped to ``('a',)`` on
+        retry. A genuine miss re-raises the *original* scalar-keyed
+        KeyError so the message is not the more confusing
+        ``KeyError: ('missing',)``.
+
         >>> v = DataVec({'a':1,'b':2})
         >>> v['a']
         1
         """
         try:
             return super().__getitem__(key)
-        except KeyError:  # Perhaps key was for an index?
-            return super().__getitem__((key,))
+        except KeyError as original:
+            if isinstance(self.index, pd.MultiIndex) and not isinstance(key, tuple):
+                try:
+                    return super().__getitem__((key,))
+                except KeyError:
+                    pass
+            raise original from None
 
     @property
     def _constructor(self):
@@ -492,14 +503,25 @@ class DataMat(pd.DataFrame):
     def __getitem__(self, key):
         """X.__getitem__(k) == X[k]
 
+        For a DataMat whose columns are a MultiIndex, a bare scalar key
+        (e.g. ``X[0]``) is automatically wrapped to ``(0,)`` on retry.
+        A genuine miss re-raises the *original* scalar-keyed KeyError
+        rather than the more confusing ``KeyError: ('missing',)`` from
+        the retry attempt.
+
         >>> X = DataMat([[1,2,3],[4,5,6]],colnames='cols',idxnames='rows')
         >>> X[0].sum().squeeze()==5
         True
         """
         try:
             return pd.DataFrame.__getitem__(self, key)
-        except KeyError:  # Perhaps key was for an index?
-            return pd.DataFrame.__getitem__(self, (key,))
+        except KeyError as original:
+            if isinstance(self.columns, pd.MultiIndex) and not isinstance(key, tuple):
+                try:
+                    return pd.DataFrame.__getitem__(self, (key,))
+                except KeyError:
+                    pass
+            raise original from None
 
     def set_index(self, columns, levels=None, inplace=False):
         """Set the DataMat index using existing columns.
