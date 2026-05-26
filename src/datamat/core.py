@@ -223,9 +223,33 @@ class DataVec(pd.Series):
         if kwargs.get("name") is None and getattr(data, "name", None) is None:
             kwargs["name"] = _fresh_vec_name()
 
+        # Pre-wrap an explicit ``index=`` argument as a MultiIndex so the
+        # finished Series is already MultiIndexed and we don't need to
+        # rebind ``self.index`` after super().__init__. The rebind path
+        # still exists below for the cases we can't anticipate up front
+        # (list/scalar input → pandas-assigned RangeIndex; Series input
+        # carrying its own non-MultiIndex), but skipping it on the common
+        # ``DataVec(data, index=[...])`` path avoids a redundant index
+        # copy and is friendlier to pandas Copy-on-Write semantics.
+        explicit_index = kwargs.get("index")
+        if explicit_index is not None and not isinstance(
+            explicit_index, pd.MultiIndex
+        ):
+            level_names = (
+                list(explicit_index.names)
+                if hasattr(explicit_index, "names")
+                else [None]
+            )
+            kwargs["index"] = pd.MultiIndex.from_arrays(
+                [explicit_index], names=level_names
+            )
+
         super().__init__(data=data, **kwargs)
 
-        # Always work with a MultiIndex
+        # Residual case: ``data`` brought its own non-MultiIndex (e.g. a
+        # Series with a flat Index) or pandas synthesised a RangeIndex.
+        # Wrap to MultiIndex here. Operates on a freshly-constructed
+        # Series so there's no aliasing risk with caller-held views.
         if not isinstance(self.index, pd.MultiIndex):
             self.index = pd.MultiIndex.from_arrays([self.index], names=self.index.names)
 
