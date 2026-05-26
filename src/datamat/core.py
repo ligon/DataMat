@@ -884,14 +884,13 @@ class DataMat(pd.DataFrame):
         drop_vestigial_levels=False,
         **kwargs,
     ):
-        """Concatenate self and other.
+        """Concatenate ``self`` with ``other``.
 
-        This uses the machinery of pandas.concat, but ensures that when two
-        DataMats having multiindices with different number of levels are
-        concatenated that new levels are added so as to preserve a result with a
-        multiindex.
-
-        if other is a dictionary and levelnames is not False, then a new level in the multiindex is created naming the columns belonging to the original DataMats.
+        See the module-level :func:`concat` for the full semantics. This
+        method is a thin shim over the same machinery
+        (:func:`_finish_concat`); it differs only in that ``self`` is
+        always prepended as the first object, using ``self.name`` as its
+        name in the resulting MultiIndex.
 
         USAGE
         -----
@@ -900,20 +899,11 @@ class DataMat(pd.DataFrame):
         >>> b.concat([a,b],axis=1,levelnames=True).columns.levels[0].tolist()
         ['b', 'a', 'b_0']
         """
-        # Make other a list, unless it's a dict, and get allnames.
-        if levelnames is False:
-            assign_missing = True
-        else:
-            assign_missing = levelnames
-            levelnames = True
+        assign_missing, levelnames = _normalize_concat_levelnames(levelnames)
 
-        dict_input = isinstance(other, dict)
-        axis_number = _normalize_axis_arg(axis)
-
-        allobjs = []
-        if dict_input:
-            allobjs = [self] + list(other.values())
-            allnames = [self.name] + list(other.keys())
+        if isinstance(other, dict):
+            allobjs: list[Any] = [self] + list(other.values())
+            allnames: list[Any] = [self.name] + list(other.keys())
         else:
             if isinstance(other, tuple):
                 allobjs = [self] + list(other)
@@ -922,59 +912,19 @@ class DataMat(pd.DataFrame):
             elif isinstance(other, list):
                 allobjs = [self] + other
             else:
-                raise ValueError("Unexpected type")
-
-            # ``allnames`` is derived from the assembled ``allobjs`` here;
-            # the per-branch assignment that used to exist for the
-            # ``DataMat | DataVec`` case was unconditionally overwritten by
-            # this line and so was dead code.
+                raise ValueError(f"Unexpected type: {type(other).__name__}")
             allnames = get_names(allobjs, assign_missing=assign_missing)
 
-        allobjs = _normalize_concat_objects(list(allobjs))
-
-        # Have list of all names, but may not be unique.
-
-        suffix = (f"{suffixer}{i:d}" for i in range(len(allnames)))
-        unique_names = []
-        for _, name in enumerate(allnames):
-            if name is None:
-                name = next(suffix)
-            if name not in unique_names:
-                unique_names.append(name)
-            else:
-                unique_names.append(name + next(suffix))
-
-        # Reconcile indices so they all have common named levels.
-        idxs = reconcile_indices(
-            [obj.index for obj in allobjs], drop_vestigial_levels=drop_vestigial_levels
+        return _finish_concat(
+            allobjs,
+            allnames,
+            axis=axis,
+            levelnames=levelnames,
+            toplevelname=toplevelname,
+            suffixer=suffixer,
+            drop_vestigial_levels=drop_vestigial_levels,
+            **kwargs,
         )
-        for i in range(len(idxs)):
-            allobjs[i].index = idxs[i]
-
-        # Get list of columns, allowing for DataVec
-        allcols = []
-        for i, obj in enumerate(allobjs):
-            try:
-                allcols += [obj.columns]
-            except AttributeError:  # No columns attribute?
-                obj = DataMat(obj)
-                allobjs[i] = obj
-                allcols += [obj.columns]
-        cols = reconcile_indices(allcols, drop_vestigial_levels=drop_vestigial_levels)
-        if axis_number == 1 and not levelnames:
-            cols = _apply_names_to_singleton_columns(cols, unique_names)
-        for i in range(len(idxs)):
-            allobjs[i].columns = cols[i]
-
-        # Now have a list of unique names, build a dictionary. ``strict=True``
-        # because ``unique_names`` is built one-per-object above; any length
-        # mismatch here would indicate a bug in that construction.
-        d = dict(zip(unique_names, allobjs, strict=True))
-
-        if levelnames:
-            return utils.concat(d, axis=axis, names=toplevelname, **kwargs)
-        else:
-            return utils.concat(allobjs, axis=axis, **kwargs)
 
 
 @dataclass(frozen=True)
@@ -1141,6 +1091,114 @@ def _normalize_axis_arg(axis: Any) -> int:
     return int(axis)
 
 
+def _normalize_concat_levelnames(
+    levelnames: bool | Sequence[Any],
+) -> tuple[bool | Sequence[Any], bool]:
+    """Return ``(assign_missing, levelnames_bool)`` for concat entry points.
+
+    ``levelnames=False`` is the "no level header" mode (assign_missing=True
+    so unnamed objects get an ``_i`` placeholder); any truthy value means
+    "add a level header, use the supplied value as the assign_missing
+    iterable".
+    """
+    if levelnames is False:
+        return True, False
+    return levelnames, True
+
+
+def _finish_concat(
+    allobjs: list[Any],
+    allnames: list[Any],
+    *,
+    axis: Any,
+    levelnames: bool,
+    toplevelname: str,
+    suffixer: str,
+    drop_vestigial_levels: bool,
+    **kwargs: Any,
+) -> "DataMat | DataVec":
+    """Shared body of :func:`concat` and :meth:`DataMat.concat`.
+
+    Both entry points are responsible for unpacking the user's input into
+    a parallel ``(allobjs, allnames)`` pair; everything from there —
+    object normalisation, unique-name suffixing, index/column
+    reconciliation, the underlying :func:`pandas.concat` call, and the
+    final DataMat/DataVec return-type coercion — happens here in a
+    single canonical pipeline. Keeping the two entry points fed by one
+    body is how we avoid the kind of drift that produced H2 (the
+    drop_vestigial_levels parity bug) and M4 (the dead allnames
+    assignment).
+    """
+    allobjs = _normalize_concat_objects(list(allobjs))
+
+    # Build a list of unique display names by suffixing duplicates.
+    suffix = (f"{suffixer}{i:d}" for i in range(len(allnames)))
+    unique_names: list[Any] = []
+    for name in allnames:
+        if name is None:
+            name = next(suffix)
+        if name not in unique_names:
+            unique_names.append(name)
+        else:
+            unique_names.append(name + next(suffix))
+
+    axis_number = _normalize_axis_arg(axis)
+
+    # Reconcile row indices to a common level set.
+    idxs = reconcile_indices(
+        [obj.index for obj in allobjs],
+        drop_vestigial_levels=drop_vestigial_levels,
+    )
+    for i in range(len(idxs)):
+        allobjs[i].index = idxs[i]
+
+    # Reconcile columns, lifting DataVec → DataMat as we go.
+    allcols = []
+    for i, obj in enumerate(allobjs):
+        try:
+            allcols.append(obj.columns)
+        except AttributeError:  # No columns attribute (raw pd.Series, etc.)
+            obj = DataMat(obj)
+            allobjs[i] = obj
+            allcols.append(obj.columns)
+    cols = reconcile_indices(allcols, drop_vestigial_levels=drop_vestigial_levels)
+    if axis_number == 1 and not levelnames:
+        cols = _apply_names_to_singleton_columns(cols, unique_names)
+    for i in range(len(idxs)):
+        allobjs[i].columns = cols[i]
+
+    # Dispatch to pandas. ``strict=True`` because unique_names is built
+    # one-per-object above; any mismatch indicates a bug in that loop.
+    d = dict(zip(unique_names, allobjs, strict=True))
+    if levelnames:
+        result = utils.concat(d, axis=axis, names=toplevelname, **kwargs)
+    else:
+        result = utils.concat(allobjs, axis=axis, **kwargs)
+
+    # Coerce return type — DataMat on horizontal stacks, DataVec when an
+    # axis=0 stack collapses to a single column.
+    if axis_number == 1:
+        if isinstance(result, DataMat):
+            return result
+        if isinstance(result, pd.DataFrame):
+            return DataMat(result)
+        if isinstance(result, pd.Series):
+            return DataMat(result.to_frame())
+        return DataMat(pd.DataFrame(result))
+
+    if isinstance(result, DataVec):
+        return result
+    if isinstance(result, pd.Series):
+        return DataVec(result)
+    if isinstance(result, pd.DataFrame):
+        if result.shape[1] == 1:
+            series = result.iloc[:, 0].copy()
+            series.name = result.columns[0]
+            return DataVec(series)
+        return DataMat(result)
+    return result
+
+
 def _apply_names_to_singleton_columns(
     columns: list[pd.MultiIndex], keys: Sequence[str]
 ) -> list[pd.MultiIndex]:
@@ -1183,14 +1241,15 @@ def concat(
     drop_vestigial_levels=False,
     **kwargs,
 ):
-    """Concatenate self and other.
+    """Concatenate DataMat / DataVec / pandas objects.
 
-    This uses the machinery of pandas.concat, but ensures that when two
-    DataMats having multiindices with different number of levels are
-    concatenated that new levels are added so as to preserve a result with a
-    multiindex.
+    Uses :func:`pandas.concat` underneath, but ensures that when objects
+    have MultiIndices with differently-named levels new levels are added
+    so the result still has a MultiIndex on both axes. If ``dms`` is a
+    dict, the keys become the new top-level on the output MultiIndex.
 
-    if other is a dictionary and levelnames is not False, then a new level in the multiindex is created naming the columns belonging to the original DataMats.
+    This is the function form; :meth:`DataMat.concat` is the method form
+    and shares the same machinery via :func:`_finish_concat`.
 
     USAGE
     -----
@@ -1199,103 +1258,32 @@ def concat(
     >>> concat([a,b],axis=1,levelnames=True).columns.levels[0].tolist()
     ['b', 'a', 'b_0']
     """
+    assign_missing, levelnames = _normalize_concat_levelnames(levelnames)
 
-    # Make dms a list, unless it's a dict, and get allnames.
-    if levelnames is False:
-        assign_missing = True
-    else:
-        assign_missing = levelnames
-        levelnames = True
-
-    dict_input = isinstance(dms, dict)
-
-    allobjs = []
-    if dict_input:
-        allobjs = list(dms.values())
-        allnames = list(dms.keys())
+    if isinstance(dms, dict):
+        allobjs: list[Any] = list(dms.values())
+        allnames: list[Any] = list(dms.keys())
     else:
         if isinstance(dms, tuple):
             allobjs = list(dms)
         elif isinstance(dms, DataMat | DataVec):
             allobjs = [dms]
         elif isinstance(dms, list):
-            allobjs = dms
+            allobjs = list(dms)
         else:
-            raise ValueError("Unexpected type")
-
-        # ``allnames`` is derived from the assembled ``allobjs`` here; the
-        # per-branch assignment for the ``DataMat | DataVec`` case was dead
-        # code (unconditionally overwritten by this line).
+            raise ValueError(f"Unexpected type: {type(dms).__name__}")
         allnames = get_names(allobjs, assign_missing=assign_missing)
 
-    allobjs = _normalize_concat_objects(list(allobjs))
-
-    # Have list of all names, but may not be unique.
-
-    suffix = (f"{suffixer}{i:d}" for i in range(len(allnames)))
-    unique_names = []
-    for name in allnames:
-        if name is None:
-            name = next(suffix)
-        if name not in unique_names:
-            unique_names.append(name)
-        else:
-            unique_names.append(name + next(suffix))
-
-    axis_number = _normalize_axis_arg(axis)
-
-    # Reconcile indices so they all have common named levels.
-    idxs = reconcile_indices(
-        [obj.index for obj in allobjs], drop_vestigial_levels=drop_vestigial_levels
+    return _finish_concat(
+        allobjs,
+        allnames,
+        axis=axis,
+        levelnames=levelnames,
+        toplevelname=toplevelname,
+        suffixer=suffixer,
+        drop_vestigial_levels=drop_vestigial_levels,
+        **kwargs,
     )
-    for i in range(len(idxs)):
-        allobjs[i].index = idxs[i]
-
-    # Get list of columns, allowing for DataVec
-    allcols = []
-    for i, obj in enumerate(allobjs):
-        try:
-            allcols += [obj.columns]
-        except AttributeError:  # No columns attribute?
-            obj = DataMat(obj)
-            allobjs[i] = obj
-            allcols += [obj.columns]
-    cols = reconcile_indices(allcols, drop_vestigial_levels=drop_vestigial_levels)
-    if axis_number == 1 and not levelnames:
-        cols = _apply_names_to_singleton_columns(cols, unique_names)
-    for i in range(len(idxs)):
-        allobjs[i].columns = cols[i]
-
-    # Now have a list of unique names, build a dictionary. ``strict=True``:
-    # see the analogous site in ``DataMat.concat`` for the invariant.
-    d = dict(zip(unique_names, allobjs, strict=True))
-
-    if levelnames:
-        result = utils.concat(d, axis=axis, names=toplevelname, **kwargs)
-    else:
-        result = utils.concat(allobjs, axis=axis, **kwargs)
-
-    if axis_number == 1:
-        if isinstance(result, DataMat):
-            return result
-        if isinstance(result, pd.DataFrame):
-            return DataMat(result)
-        if isinstance(result, pd.Series):
-            return DataMat(result.to_frame())
-        return DataMat(pd.DataFrame(result))
-
-    # axis==0: favour returning a DataVec when result collapses to a single column
-    if isinstance(result, DataVec):
-        return result
-    if isinstance(result, pd.Series):
-        return DataVec(result)
-    if isinstance(result, pd.DataFrame):
-        if result.shape[1] == 1:
-            series = result.iloc[:, 0].copy()
-            series.name = result.columns[0]
-            return DataVec(series)
-        return DataMat(result)
-    return result
 
 
 def read_parquet(fn, **kwargs):
