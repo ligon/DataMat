@@ -265,6 +265,27 @@ def cholesky(A):
     return pd.DataFrame(L, index=A.index, columns=A.columns)
 
 
+def _check_level_name_collision(left_names, right_names, axis):
+    """Raise ValueError if non-None level names overlap between two indexes.
+
+    The Kronecker output's row/column MultiIndex concatenates the operand
+    names; if the same (non-None) name appears on both sides, downstream
+    label-based operations like ``get_level_values(name)`` or
+    ``droplevel(name)`` raise ``ValueError: The name <n> occurs multiple
+    times`` deep inside pandas. Catch that here with a message that
+    points at the kron call.
+    """
+    overlap = {n for n in left_names if n is not None} & {
+        n for n in right_names if n is not None
+    }
+    if overlap:
+        raise ValueError(
+            f"kron: operand {axis} share level name(s) {sorted(overlap)!r}; "
+            "rename one side (e.g. via .index.set_names / .columns.set_names) "
+            "before kronning to keep the output MultiIndex unambiguous."
+        )
+
+
 def kron(A, B, sparse=False):
     """Kronecker product that preserves pandas index/column metadata."""
     if sparse:
@@ -273,6 +294,7 @@ def kron(A, B, sparse=False):
     if isinstance(A, pd.DataFrame):
         a = A.values
         if isinstance(B, pd.DataFrame):
+            _check_level_name_collision(A.columns.names, B.columns.names, "columns")
             columns = MultiIndex.from_tuples(
                 [(*i, *j) for i in A.columns for j in B.columns],
                 names=A.columns.names + B.columns.names,
@@ -299,6 +321,7 @@ def kron(A, B, sparse=False):
         columns = None
 
     if isinstance(A, pd.DataFrame) and isinstance(B, pd.DataFrame):
+        _check_level_name_collision(A.index.names, B.index.names, "index")
         index = MultiIndex.from_tuples(
             [(*i, *j) for i in A.index for j in B.index],
             names=A.index.names + B.index.names,
