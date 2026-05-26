@@ -54,9 +54,45 @@ def pinv(A):
     return pd.DataFrame(B, columns=A.index, index=A.columns)
 
 
-def matrix_product(X, Y, strict=False, fillmiss=True):
-    """Matrix product X @ Y allowing for missing data."""
+def matrix_product(X, Y, strict=False, fillmiss=True, align=False):
+    """Matrix product ``X @ Y`` with optional label-handling modes.
+
+    Parameters
+    ----------
+    X, Y : DataFrame-like
+        Operands. The product is computed positionally via :func:`numpy.dot`;
+        label alignment is not performed unless ``align=True``.
+    strict : bool, default False
+        If True, raise :class:`ValueError` when ``X.columns`` and ``Y.index``
+        do not match. This is the "enforce" mode.
+    fillmiss : bool, default True
+        Replace NaNs with 0 before the product. Operates on copies; the
+        caller's ``X`` and ``Y`` are not mutated.
+    align : bool, default False
+        If True, when ``X.columns != Y.index`` try to reconcile by dropping
+        vestigial levels (levels containing a single unique value). Operates
+        on local copies; the caller's ``X`` and ``Y`` are not mutated.
+
+    Notes
+    -----
+    ``strict`` and ``align`` cannot both be True. The previous version of this
+    function used a single ``strict`` flag that silently *mutated* the caller's
+    index and columns; the two-flag split disambiguates the intent.
+    """
+    if strict and align:
+        raise ValueError("matrix_product: pass at most one of strict, align.")
+
     if strict and not all(X.columns == Y.index):
+        raise ValueError(
+            "matrix_product strict=True: X.columns and Y.index do not match. "
+            "Pass align=True to attempt reconciliation by dropping vestigial "
+            "levels, or strict=False to fall back to positional multiplication."
+        )
+
+    if align and not all(X.columns == Y.index):
+        # Defensive copies — never mutate the caller's labels.
+        X = X.copy(deep=False)
+        Y = Y.copy(deep=False)
         X.columns = drop_vestigial_levels(X.columns)
         Y.index = drop_vestigial_levels(Y.index)
 

@@ -729,9 +729,16 @@ class DataMat(pd.DataFrame):
         return cls(frame, idxnames=idxnames, colnames=colnames, name=name)
 
     # Binary operations
-    def matmul(self, other, strict=False, fillmiss=False):
-        """Matrix product preserving labels on the surviving axes."""
-        Y = matrix_product(self, other, strict=strict, fillmiss=fillmiss)
+    def matmul(self, other, strict=False, fillmiss=False, align=False):
+        """Matrix product preserving labels on the surviving axes.
+
+        See :func:`datamat.utils.matrix_product` for the meaning of
+        ``strict``, ``fillmiss``, and ``align``. Briefly: ``strict=True``
+        raises on a column/index mismatch, ``align=True`` reconciles by
+        dropping vestigial levels (on local copies, leaving the caller's
+        labels untouched).
+        """
+        Y = matrix_product(self, other, strict=strict, fillmiss=fillmiss, align=align)
 
         if len(other.shape) <= 1:
             if isinstance(other, DataVec):
