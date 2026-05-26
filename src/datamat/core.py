@@ -968,17 +968,23 @@ def reconcile_indices(idxs, fillvalue="", drop_vestigial_levels=False):
     dropped_level_values = []
     newidxs = []
     for x in idxs:
-        # Identify vestigial levels & drop
-        droppednames = {}
-        for i, level in enumerate(x.levels):
-            if drop_vestigial_levels and len(level) == 1:  # Vestigial level
-                try:
-                    if len(x.levels) > 1:
-                        dropname = x.names[i]
-                        x = x.droplevel(dropname)
-                        droppednames[dropname] = level[0]
-                except AttributeError:  # May be an index
-                    pass
+        # Identify vestigial levels & drop. Collect names first so we don't
+        # mutate the index while iterating its levels (which previously caused
+        # ``x.names[i]`` to dereference a shrunk FrozenList and raise
+        # IndexError once two or more vestigial levels were dropped).
+        droppednames: dict[Any, Any] = {}
+        if drop_vestigial_levels and hasattr(x, "levels"):
+            vestigial = [
+                (n, level[0])
+                for n, level in zip(x.names, x.levels, strict=True)
+                if len(level) == 1
+            ]
+            # Keep at least one level so the index never collapses to empty.
+            if len(vestigial) == x.nlevels and vestigial:
+                vestigial = vestigial[:-1]
+            for dropname, value in vestigial:
+                x = x.droplevel(dropname)
+                droppednames[dropname] = value
         dropped_level_values.append(droppednames)
         newidxs.append(x)
         for newname in x.names:
