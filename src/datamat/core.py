@@ -40,6 +40,7 @@ __all__ = [
     "DataVec",
     "DataMat",
     "DataMatJax",
+    "DataVecJax",
     "concat",
     "get_names",
     "reconcile_indices",
@@ -402,6 +403,38 @@ class DataVec(pd.Series):
         """Drop index levels that don't vary."""
         self.index = utils.drop_vestigial_levels(self.index, axis=0)
         return self
+
+    def to_jax(self, *, dtype: Any | None = float) -> "DataVecJax":
+        """Convert the vector into a JAX-compatible wrapper retaining labels.
+
+        Mirrors :meth:`DataMat.to_jax`. The returned :class:`DataVecJax`
+        carries the JAX values, the pandas index (rebuilt through a
+        hashable tuple representation inside the pytree machinery — see
+        :class:`DataMatJax`), and the vector's ``name`` so it round-trips
+        through ``to_datavec()`` without losing identity.
+        """
+        if not _JAX_AVAILABLE:  # pragma: no cover - depends on optional JAX
+            raise RuntimeError(
+                "DataVec.to_jax() requires JAX. Install the 'jax' extra or add "
+                "JAX to your environment."
+            )
+
+        if dtype is None:
+            numpy_array = self.to_numpy()
+            values = jnp.asarray(numpy_array, dtype=numpy_array.dtype)
+        else:
+            numpy_array = self.to_numpy(dtype=dtype)
+            values = jnp.asarray(numpy_array, dtype=numpy_array.dtype)
+        return DataVecJax(
+            values=values,
+            index=self.index.copy(),
+            name=self.name,
+        )
+
+    @classmethod
+    def from_jax(cls, wrapper: "DataVecJax") -> "DataVec":
+        """Rebuild a :class:`DataVec` from a :class:`DataVecJax` wrapper."""
+        return wrapper.to_datavec()
 
     @classmethod
     def random(
@@ -1046,6 +1079,68 @@ if _JAX_AVAILABLE:  # pragma: no cover - depends on optional JAX
         DataMatJax,
         lambda wrapper: wrapper.tree_flatten(),
         DataMatJax.tree_unflatten,
+    )
+
+
+@dataclass(frozen=True)
+class DataVecJax:
+    """PyTree wrapper coupling a 1-D JAX array with DataVec metadata.
+
+    Mirrors :class:`DataMatJax` for the labelled-vector case. The
+    ``values`` field is the single PyTree leaf — so ``jax.grad`` w.r.t.
+    a ``DataVecJax`` returns a fresh ``DataVecJax`` with the same labels
+    — while ``index`` and ``name`` live in the pytree's static aux data.
+    Like :class:`DataMatJax`, the pandas index is tupled at flatten time
+    to keep JAX's cache-equality machinery happy across multiple
+    instances.
+
+    ``__post_init__`` validates that ``values`` is 1-D and that its
+    length matches the index. The check is skipped when ``values``
+    doesn't expose a concrete ``.shape`` (e.g. during a trace where
+    only an abstract value is available) — JAX guarantees length /
+    rank consistency in that path.
+    """
+
+    values: JaxArray
+    index: pd.Index
+    name: Any = None
+
+    def __post_init__(self) -> None:
+        shape = getattr(self.values, "shape", None)
+        if shape is None:
+            return
+        if len(shape) != 1:
+            raise ValueError(f"DataVecJax.values must be 1-D; got shape {shape}.")
+        if shape[0] != len(self.index):
+            raise ValueError(
+                f"DataVecJax: values length {shape[0]} != "
+                f"index length {len(self.index)}."
+            )
+
+    def tree_flatten(
+        self,
+    ) -> tuple[tuple[JaxArray], tuple[_IndexStatic, Any]]:
+        return (self.values,), (_index_to_static(self.index), self.name)
+
+    @classmethod
+    def tree_unflatten(
+        cls,
+        metadata: tuple[_IndexStatic, Any],
+        children: tuple[JaxArray],
+    ) -> "DataVecJax":
+        idx_meta, name = metadata
+        (values,) = children
+        return cls(values=values, index=_static_to_index(idx_meta), name=name)
+
+    def to_datavec(self) -> "DataVec":
+        return DataVec(self.values, index=self.index.copy(), name=self.name)
+
+
+if _JAX_AVAILABLE:  # pragma: no cover - depends on optional JAX
+    jax_tree_util.register_pytree_node(
+        DataVecJax,
+        lambda wrapper: wrapper.tree_flatten(),
+        DataVecJax.tree_unflatten,
     )
 
 

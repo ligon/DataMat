@@ -147,3 +147,117 @@ def test_jit_step_in_optimisation_loop_across_multiple_datamatjax():
     x = step(x, A_1)
     x = step(x, A_2)
     assert x.shape == (2,)
+
+
+# ---------------------------------------------------------------------------
+# DataVecJax
+# ---------------------------------------------------------------------------
+
+
+def test_datavec_to_jax_round_trip_preserves_labels_and_name():
+    from datamat import DataVec, DataVecJax
+
+    v = DataVec([1.0, 2.0, 3.0], index=["a", "b", "c"], idxnames="i", name="x")
+
+    wrapper = v.to_jax()
+    assert isinstance(wrapper, DataVecJax)
+    np.testing.assert_allclose(np.asarray(wrapper.values), v.values)
+    assert list(wrapper.index.names) == ["i"]
+    assert wrapper.name == "x"
+
+    v_back = DataVec.from_jax(wrapper)
+    assert isinstance(v_back, DataVec)
+    assert v_back.name == "x"
+    assert list(v_back.index.names) == ["i"]
+    np.testing.assert_allclose(np.asarray(v_back.values), v.values)
+
+
+def test_grad_wrt_datavecjax_returns_labelled_wrapper():
+    from datamat import DataVec, DataVecJax
+
+    v = DataVec([1.0, 2.0, 3.0], idxnames="i", name="x").to_jax()
+
+    def loss(v_jax):
+        return jnp.sum(v_jax.values**2)
+
+    g = jax.grad(loss)(v)
+
+    assert isinstance(g, DataVecJax)
+    np.testing.assert_allclose(np.asarray(g.values), [2.0, 4.0, 6.0])
+    assert list(g.index.names) == ["i"]
+    assert g.name == "x"
+
+
+def test_jit_caches_across_datavecjax_instances_with_same_labels():
+    from datamat import DataVec
+
+    v1 = DataVec([1.0, 2.0], idxnames="i", name="a").to_jax()
+    v2 = DataVec([3.0, 4.0], idxnames="i", name="b").to_jax()
+
+    @jax.jit
+    def total(v):
+        return jnp.sum(v.values)
+
+    # Both calls must succeed even though the wrappers are distinct
+    # objects with different ``.name`` aux entries.
+    assert float(total(v1)) == 3.0
+    assert float(total(v2)) == 7.0
+
+
+def test_datavecjax_rejects_length_mismatch():
+    from datamat import DataVecJax
+
+    with pytest.raises(ValueError, match="values length 2"):
+        DataVecJax(
+            values=jnp.array([1.0, 2.0]),
+            index=pd.Index(["a", "b", "c"], name="i"),
+        )
+
+
+def test_datavecjax_rejects_non_1d_values():
+    from datamat import DataVecJax
+
+    with pytest.raises(ValueError, match="must be 1-D"):
+        DataVecJax(
+            values=jnp.eye(3),
+            index=pd.Index(["a", "b", "c"], name="i"),
+        )
+
+
+def test_optimisation_loop_with_labelled_variable_and_operator():
+    """End-to-end: jit-compile a gradient step that takes a labelled
+    parameter vector and a labelled operator. This is the use case the
+    DataVecJax + JIT-safe DataMatJax combination is designed for."""
+    from datamat import DataMat, DataVec, DataVecJax
+
+    A = DataMat(
+        np.array([[3.0, 1.0], [1.0, 2.0]]),
+        idxnames="i",
+        colnames="i",
+    ).to_jax()
+    a = DataVec([1.5, -0.5], idxnames="i", name="a").to_jax()
+
+    @jax.jit
+    def step(x, A, a):
+        # Quadratic: ‖A x - a‖²  →  ∂/∂x = 2 A^T (A x - a)
+        grad = jax.grad(lambda x_arr: jnp.sum((A.values @ x_arr - a.values) ** 2))(
+            x.values
+        )
+        return DataVecJax(
+            values=x.values - 0.05 * grad,
+            index=x.index,
+            name=x.name,
+        )
+
+    x = DataVec([0.0, 0.0], idxnames="i", name="x").to_jax()
+    for _ in range(100):
+        x = step(x, A, a)
+
+    # Optimum: x* = A⁻¹ a ≈ [0.8, -0.65]
+    np.testing.assert_allclose(
+        np.asarray(x.values),
+        np.linalg.solve(np.asarray(A.values), np.asarray(a.values)),
+        atol=0.01,
+    )
+    assert x.name == "x"
+    assert list(x.index.names) == ["i"]
