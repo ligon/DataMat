@@ -56,6 +56,29 @@ def test_reconcile_returns_same_index_for_already_uniform_inputs():
     assert out_b.tolist() == b.tolist()
 
 
+def test_reconcile_aligns_indices_with_differently_named_levels():
+    """When two indices share some level names and not others, reconcile
+    must produce indices with a uniform level set and the same level order.
+
+    Previously this raised ``KeyError: 'Level k not found'`` because
+    ``utils.concat`` silently dropped its ``names=`` argument when ``keys``
+    was supplied, so newly-added levels were named ``_0`` instead of the
+    requested level name and ``reorder_levels`` couldn't find them.
+    """
+    a = pd.MultiIndex.from_tuples([(0, "x"), (1, "y")], names=["i", "j"])
+    b = pd.MultiIndex.from_tuples([("p", 0), ("q", 1)], names=["k", "i"])
+
+    out_a, out_b = reconcile_indices([a, b])
+
+    assert list(out_a.names) == list(out_b.names)
+    assert set(out_a.names) == {"i", "j", "k"}
+    # Each output preserves the original varying values on its own levels.
+    assert out_a.get_level_values("i").tolist() == [0, 1]
+    assert out_a.get_level_values("j").tolist() == ["x", "y"]
+    assert out_b.get_level_values("i").tolist() == [0, 1]
+    assert out_b.get_level_values("k").tolist() == ["p", "q"]
+
+
 @pytest.mark.parametrize(
     "names, tuples",
     [

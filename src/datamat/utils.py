@@ -27,12 +27,23 @@ __all__ = [
 
 
 def concat(objs, axis=0, names=None, **kwargs):
-    """Wrapper around pandas.concat that accepts dicts or iterables."""
+    """Wrapper around pandas.concat that accepts dicts or iterables.
+
+    ``names`` labels the new hierarchical-index level(s) created by either
+    a dict input or an explicit ``keys=`` argument; it is forwarded to
+    :func:`pandas.concat` as ``names=`` in both branches.
+
+    The previous implementation used ``names`` as a fallback for ``keys``
+    (``kwargs.setdefault("keys", names)``), which silently dropped
+    ``names`` whenever the caller also supplied ``keys`` — breaking the
+    "add a missing level" branch of :func:`reconcile_indices`, which
+    needs both.
+    """
     if isinstance(objs, dict):
         return pd.concat(objs, axis=axis, names=names, **kwargs)
 
     if names is not None:
-        kwargs.setdefault("keys", names)
+        kwargs.setdefault("names", names)
     return pd.concat(objs, axis=axis, **kwargs)
 
 
