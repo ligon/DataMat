@@ -960,24 +960,78 @@ class DataMat(pd.DataFrame):
         )
 
 
+# Type alias for the hashable label payload that lives in JAX pytree aux
+# data: a tuple of (label-tuples, level-names). See ``_index_to_static`` /
+# ``_static_to_index`` below.
+_IndexStatic = tuple[tuple[Any, ...], tuple[Any, ...]]
+
+
+def _index_to_static(idx: pd.Index) -> _IndexStatic:
+    """Convert a pandas Index/MultiIndex to a hashable, ==-friendly
+    representation suitable for use as JAX pytree aux metadata.
+
+    pd.Index itself is *not* a valid metadata payload — it isn't
+    hashable and ``Index.__eq__`` returns an element-wise array
+    rather than a bool. Both are required by JAX's pytree-cache
+    machinery; the symptom is
+
+      ValueError: Exception raised while checking equality of metadata
+                  fields of pytree.
+
+    raised the moment two DataMatJax instances participate in the same
+    traced computation. We collapse the labels to ``(tuple_of_tuples,
+    tuple_of_level_names)`` — both fully hashable — and rebuild the
+    pd.MultiIndex on the way out.
+    """
+    if isinstance(idx, pd.MultiIndex):
+        return tuple(map(tuple, idx.tolist())), tuple(idx.names)
+    return tuple((v,) for v in idx.tolist()), (idx.name,)
+
+
+def _static_to_index(meta: _IndexStatic) -> pd.MultiIndex:
+    """Inverse of :func:`_index_to_static` — rebuild a MultiIndex from the
+    hashable payload."""
+    tuples, names = meta
+    return pd.MultiIndex.from_tuples(list(tuples), names=list(names))
+
+
 @dataclass(frozen=True)
 class DataMatJax:
-    """PyTree wrapper coupling JAX arrays with DataMat metadata."""
+    """PyTree wrapper coupling JAX arrays with DataMat metadata.
+
+    The ``values`` field is the single PyTree leaf (so ``jax.grad``
+    differentiates with respect to it, ``jax.vmap`` maps over it, etc.).
+    ``index`` and ``columns`` are stored alongside but live in the
+    pytree's static aux data — see :func:`_index_to_static` for the
+    JIT-safety dance required to put pandas labels in aux without
+    breaking JAX's cache equality check.
+    """
 
     values: JaxArray
     index: pd.Index
     columns: pd.Index
 
-    def tree_flatten(self) -> tuple[tuple[JaxArray], tuple[pd.Index, pd.Index]]:
-        return (self.values,), (self.index, self.columns)
+    def tree_flatten(
+        self,
+    ) -> tuple[tuple[JaxArray], tuple[_IndexStatic, _IndexStatic]]:
+        return (
+            (self.values,),
+            (_index_to_static(self.index), _index_to_static(self.columns)),
+        )
 
     @classmethod
     def tree_unflatten(
-        cls, metadata: tuple[pd.Index, pd.Index], children: tuple[JaxArray]
+        cls,
+        metadata: tuple[_IndexStatic, _IndexStatic],
+        children: tuple[JaxArray],
     ) -> "DataMatJax":
-        index, columns = metadata
+        idx_meta, col_meta = metadata
         (values,) = children
-        return cls(values=values, index=index, columns=columns)
+        return cls(
+            values=values,
+            index=_static_to_index(idx_meta),
+            columns=_static_to_index(col_meta),
+        )
 
     def to_datamat(self) -> DataMat:
         return DataMat(
