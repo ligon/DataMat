@@ -251,12 +251,39 @@ def eig(A, hermitian=False, ascending=True):
     return s2, u
 
 
-def sqrtm(A, hermitian=False):
-    """Return symmetric square root of positive semi-definite matrix."""
-    u, s, vt = svd(A, hermitian=hermitian)
-    if np.any(s < 0):
+def sqrtm(A, hermitian=True):
+    """Return the symmetric square root of a positive semi-definite matrix.
+
+    Uses :func:`eig` (with ``hermitian=True``) so the test for
+    positive-semi-definiteness can actually fire: it checks the *sign of
+    the eigenvalues* of ``A``. The previous implementation went through
+    :func:`svd` and inspected the singular values, which are nonnegative
+    by definition — so the guard never triggered and ``sqrtm`` silently
+    returned a non-square-root for non-PSD inputs (e.g. on
+    ``diag([1, -1])`` it returned ``diag([1, -1])``, whose square is
+    ``I``, not the input).
+
+    Raises
+    ------
+    ValueError
+        If any eigenvalue is negative beyond a small numerical tolerance
+        relative to the largest absolute eigenvalue.
+
+    Notes
+    -----
+    ``hermitian`` is kept for backward compatibility but is now ignored
+    — a real symmetric square root is only well-defined for hermitian
+    inputs, so the function always assumes the input is hermitian.
+    """
+    del hermitian  # always treat as hermitian; see Notes.
+    s2, U = eig(A, hermitian=True, ascending=True)
+    eigvals = np.asarray(s2)
+    max_abs = float(np.max(np.abs(eigvals))) if len(eigvals) else 0.0
+    if eigvals.min(initial=0.0) < -1e-10 * max(max_abs, 1.0):
         raise ValueError("Matrix must be positive semi-definite.")
-    return u @ np.diag(np.sqrt(s)) @ vt
+    # Clip tiny negative noise to zero before taking the square root.
+    sqrt_s = np.sqrt(np.maximum(eigvals, 0.0))
+    return U @ np.diag(sqrt_s) @ U.T
 
 
 def cholesky(A):

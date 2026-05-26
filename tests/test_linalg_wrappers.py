@@ -147,11 +147,25 @@ def test_utils_cholesky_rejects_non_pd_matrix():
         utils.cholesky(not_pd)
 
 
-# Note: ``utils.sqrtm`` has a guard ``if np.any(s < 0)`` but ``s`` comes
-# from SVD and is nonnegative by definition, so the guard never fires.
-# See the corresponding cq finding — sqrtm currently returns a silently
-# wrong real result for non-PSD inputs. Test will go here once that's
-# fixed.
+def test_utils_sqrtm_rejects_non_psd_matrix():
+    """``utils.sqrtm`` uses eigendecomposition so it can actually detect
+    non-PSD inputs. The previous SVD-based implementation inspected
+    singular values (nonnegative by construction), so the guard never
+    fired and the function silently returned a non-square-root for
+    non-PSD inputs."""
+    not_psd = pd.DataFrame(np.diag([1.0, -1.0]))
+    with pytest.raises(ValueError, match="positive semi-definite"):
+        utils.sqrtm(not_psd)
+
+
+def test_utils_sqrtm_round_trip_on_psd_with_zero_eigenvalue():
+    """A rank-deficient PSD matrix should still round-trip: tiny negative
+    numerical noise on a zero eigenvalue must be clipped, not rejected."""
+    psd_with_zero = pd.DataFrame(np.diag([0.0, 4.0]))
+    S = utils.sqrtm(psd_with_zero)
+    np.testing.assert_allclose(
+        np.asarray(S) @ np.asarray(S), psd_with_zero.values, atol=1e-10
+    )
 
 
 # ---------------------------------------------------------------------------
