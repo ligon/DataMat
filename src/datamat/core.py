@@ -232,9 +232,7 @@ class DataVec(pd.Series):
         # ``DataVec(data, index=[...])`` path avoids a redundant index
         # copy and is friendlier to pandas Copy-on-Write semantics.
         explicit_index = kwargs.get("index")
-        if explicit_index is not None and not isinstance(
-            explicit_index, pd.MultiIndex
-        ):
+        if explicit_index is not None and not isinstance(explicit_index, pd.MultiIndex):
             level_names = (
                 list(explicit_index.names)
                 if hasattr(explicit_index, "names")

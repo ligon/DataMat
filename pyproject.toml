@@ -30,6 +30,7 @@ black = "^24.4.2"
 mypy = "^1.10.0"
 ipython = "^8.26.0"
 matplotlib = "^3.10.0"
+hypothesis = "^6.116"
 
 [tool.poetry.group.docs.dependencies]
 mkdocs = ">=1.5"
