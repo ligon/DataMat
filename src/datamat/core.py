@@ -1159,7 +1159,7 @@ def concat(
             obj = DataMat(obj)
             allobjs[i] = obj
             allcols += [obj.columns]
-    cols = reconcile_indices(allcols)
+    cols = reconcile_indices(allcols, drop_vestigial_levels=drop_vestigial_levels)
     if axis_number == 1 and not levelnames:
         cols = _apply_names_to_singleton_columns(cols, unique_names)
     for i in range(len(idxs)):

@@ -58,3 +58,25 @@ def test_concat_accepts_pandas_series_vertical():
     assert list(result.index.get_level_values(0)) == [0, 1, 0, 1]
     assert list(result.values) == [1, 2, 2, 3]
     assert result.name == ("c",)
+
+
+def test_concat_drop_vestigial_levels_parity_module_vs_method():
+    """``dm.concat(...)`` and ``A.concat(B, ...)`` must drop vestigial column
+    levels identically when ``drop_vestigial_levels=True``.
+
+    Previously the module-level wrapper omitted the flag from its column
+    reconcile call (core.py:1164), so vestigial column levels survived the
+    module-level path while being dropped by the method-level one.
+    """
+    idx = pd.MultiIndex.from_tuples([("a", 0), ("a", 1)], names=["ves", "i"])
+    col = pd.MultiIndex.from_tuples([("ves_c", "x"), ("ves_c", "y")], names=["vc", "j"])
+    A = dm.DataMat([[1, 2], [3, 4]], index=idx, columns=col)
+    B = dm.DataMat([[5, 6], [7, 8]], index=idx, columns=col)
+
+    out_mod = dm.concat([A, B], axis=0, drop_vestigial_levels=True)
+    out_meth = A.concat(B, axis=0, drop_vestigial_levels=True)
+
+    assert list(out_mod.columns.names) == list(out_meth.columns.names)
+    assert out_mod.columns.tolist() == out_meth.columns.tolist()
+    # And the vestigial column level should genuinely be gone.
+    assert "vc" not in out_mod.columns.names
