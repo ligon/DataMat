@@ -1028,6 +1028,37 @@ def _static_to_index(meta: _IndexStatic) -> pd.MultiIndex:
     return pd.MultiIndex.from_tuples(list(tuples), names=list(names))
 
 
+def _check_axis_alignment(left: pd.Index, right: pd.Index, op_label: str) -> None:
+    """Raise if two axes don't have identical values *and* identical level names.
+
+    Used by the JAX-side wrappers' operators (``DataMatJax @ DataVecJax``,
+    etc.) to enforce strict label safety on contracted axes. Unlike the
+    pandas-side ``DataMat.matmul`` default — which aligns purely by
+    position — the labelled JAX wrappers refuse misaligned axes by
+    default. The rationale: the whole point of going through
+    ``DataMatJax`` / ``DataVecJax`` rather than raw ``jnp`` arrays is to
+    pin down which axis means what; silent positional alignment defeats
+    that purpose.
+
+    The check is host-side: ``index.equals`` returns a bool (unlike
+    ``index ==`` which returns an array) so it works fine even when
+    ``self.values`` is a JAX tracer.
+    """
+    same_names = list(left.names) == list(right.names)
+    same_content = left.equals(right)
+    if not (same_names and same_content):
+        raise ValueError(
+            f"{op_label}: contracted-axis labels do not match.\n"
+            f"  left:  names={list(left.names)}, len={len(left)}\n"
+            f"  right: names={list(right.names)}, len={len(right)}\n"
+            "Reconcile the labels at the boundary (e.g. via "
+            "``DataMat.matmul(..., align=True)`` on the pandas side, "
+            "or by re-indexing the DataVec / DataMat before "
+            "``.to_jax()``) — the JAX wrappers do not perform silent "
+            "positional alignment."
+        )
+
+
 @dataclass(frozen=True)
 class DataMatJax:
     """PyTree wrapper coupling JAX arrays with DataMat metadata.
@@ -1072,6 +1103,37 @@ class DataMatJax:
             index=self.index.copy(),
             columns=self.columns.copy(),
         )
+
+    # ----- Labelled operators -----------------------------------------
+    # All operators check contracted-axis label alignment strictly (host
+    # side), unlike the pandas-side default which aligns positionally.
+    # See :func:`_check_axis_alignment` for the rationale.
+
+    @property
+    def T(self) -> "DataMatJax":
+        """Transpose: swap ``values``, ``index``, and ``columns``."""
+        return DataMatJax(
+            values=self.values.T,
+            index=self.columns,
+            columns=self.index,
+        )
+
+    def __matmul__(self, other: Any) -> "DataMatJax | DataVecJax":
+        if isinstance(other, DataVecJax):
+            _check_axis_alignment(self.columns, other.index, "DataMatJax @ DataVecJax")
+            return DataVecJax(
+                values=self.values @ other.values,
+                index=self.index,
+                name=other.name,
+            )
+        if isinstance(other, DataMatJax):
+            _check_axis_alignment(self.columns, other.index, "DataMatJax @ DataMatJax")
+            return DataMatJax(
+                values=self.values @ other.values,
+                index=self.index,
+                columns=other.columns,
+            )
+        return NotImplemented
 
 
 if _JAX_AVAILABLE:  # pragma: no cover - depends on optional JAX
@@ -1134,6 +1196,17 @@ class DataVecJax:
 
     def to_datavec(self) -> "DataVec":
         return DataVec(self.values, index=self.index.copy(), name=self.name)
+
+    # ----- Labelled operators -----------------------------------------
+    # Strict-by-default contracted-axis label check; see
+    # :func:`_check_axis_alignment`.
+
+    def __matmul__(self, other: Any) -> Any:
+        if isinstance(other, DataVecJax):
+            # Dot product. Contracted axis is each vector's own index.
+            _check_axis_alignment(self.index, other.index, "DataVecJax @ DataVecJax")
+            return self.values @ other.values  # scalar (0-D JaxArray)
+        return NotImplemented
 
 
 if _JAX_AVAILABLE:  # pragma: no cover - depends on optional JAX
