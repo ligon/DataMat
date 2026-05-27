@@ -419,12 +419,19 @@ class DataVec(pd.Series):
                 "JAX to your environment."
             )
 
+        # ``to_numpy(dtype=...)`` already produces an array of the requested
+        # dtype; passing the same dtype to ``jnp.asarray`` is redundant and
+        # triggers a UserWarning when the requested dtype isn't JAX's
+        # currently-configured precision (the common ``dtype=float`` →
+        # ``float64`` case under default x32 JAX). Drop the redundant
+        # ``dtype=`` kwarg: JAX will downcast silently to match its
+        # configured precision, identical to the previous behaviour but
+        # without the noise.
         if dtype is None:
             numpy_array = self.to_numpy()
-            values = jnp.asarray(numpy_array, dtype=numpy_array.dtype)
         else:
             numpy_array = self.to_numpy(dtype=dtype)
-            values = jnp.asarray(numpy_array, dtype=numpy_array.dtype)
+        values = jnp.asarray(numpy_array)
         return DataVecJax(
             values=values,
             index=self.index.copy(),
@@ -672,12 +679,16 @@ class DataMat(pd.DataFrame):
                 "JAX to your environment."
             )
 
+        # See :meth:`DataVec.to_jax` for the rationale: ``to_numpy(dtype=...)``
+        # already returns an array of the requested dtype, so passing
+        # ``dtype=`` to ``jnp.asarray`` is redundant and the redundancy
+        # triggers a UserWarning under default x32 JAX. JAX still downcasts
+        # silently if the input dtype doesn't fit its configured precision.
         if dtype is None:
             numpy_array = self.to_numpy()
-            values = jnp.asarray(numpy_array, dtype=numpy_array.dtype)
         else:
             numpy_array = self.to_numpy(dtype=dtype)
-            values = jnp.asarray(numpy_array, dtype=numpy_array.dtype)
+        values = jnp.asarray(numpy_array)
         return DataMatJax(
             values=values,
             index=self.index.copy(),
