@@ -347,6 +347,211 @@ def test_datavecjax_matmul_datamatjax_rejects_mismatched_axis():
         v_col_keyed @ A
 
 
+# ---------------------------------------------------------------------------
+# Scalar arithmetic + elementwise +/-
+# ---------------------------------------------------------------------------
+
+
+def test_datamatjax_scalar_mul_preserves_labels():
+    from datamat import DataMat
+
+    A = DataMat(
+        [[1.0, 2.0], [3.0, 4.0]],
+        index=pd.Index(["r0", "r1"], name="i"),
+        columns=pd.Index(["c0", "c1"], name="j"),
+    ).to_jax()
+
+    half_A = 0.5 * A
+    A_half = A * 0.5
+
+    np.testing.assert_allclose(np.asarray(half_A.values), 0.5 * np.asarray(A.values))
+    np.testing.assert_allclose(np.asarray(A_half.values), 0.5 * np.asarray(A.values))
+    assert list(half_A.index.names) == ["i"]
+    assert list(A_half.columns.names) == ["j"]
+
+
+def test_datamatjax_scalar_div_and_neg_preserve_labels():
+    from datamat import DataMat
+
+    A = DataMat([[2.0, 4.0]], idxnames="i", colnames="j").to_jax()
+
+    halved = A / 2.0
+    neg = -A
+    reverse_div = 8.0 / A
+
+    np.testing.assert_array_equal(np.asarray(halved.values), [[1.0, 2.0]])
+    np.testing.assert_array_equal(np.asarray(neg.values), [[-2.0, -4.0]])
+    np.testing.assert_array_equal(np.asarray(reverse_div.values), [[4.0, 2.0]])
+
+
+def test_datamatjax_scalar_add_and_sub_work_in_both_directions():
+    from datamat import DataMat
+
+    A = DataMat([[1.0, 2.0]], idxnames="i", colnames="j").to_jax()
+
+    np.testing.assert_array_equal(np.asarray((A + 1.0).values), [[2.0, 3.0]])
+    np.testing.assert_array_equal(np.asarray((1.0 + A).values), [[2.0, 3.0]])
+    np.testing.assert_array_equal(np.asarray((A - 0.5).values), [[0.5, 1.5]])
+    np.testing.assert_array_equal(np.asarray((10.0 - A).values), [[9.0, 8.0]])
+
+
+def test_datamatjax_elementwise_add_sub_with_matching_labels():
+    from datamat import DataMat, DataMatJax
+
+    A = DataMat(
+        [[1.0, 2.0], [3.0, 4.0]],
+        index=pd.Index(["r0", "r1"], name="i"),
+        columns=pd.Index(["c0", "c1"], name="j"),
+    ).to_jax()
+    B = DataMat(
+        [[10.0, 20.0], [30.0, 40.0]],
+        index=pd.Index(["r0", "r1"], name="i"),
+        columns=pd.Index(["c0", "c1"], name="j"),
+    ).to_jax()
+
+    s = A + B
+    d = A - B
+
+    assert isinstance(s, DataMatJax) and isinstance(d, DataMatJax)
+    np.testing.assert_array_equal(np.asarray(s.values), [[11.0, 22.0], [33.0, 44.0]])
+    np.testing.assert_array_equal(np.asarray(d.values), [[-9.0, -18.0], [-27.0, -36.0]])
+    assert list(s.index.names) == ["i"]
+    assert list(s.columns.names) == ["j"]
+
+
+def test_datamatjax_elementwise_add_rejects_mismatched_rows():
+    from datamat import DataMat
+
+    A = DataMat(
+        [[1.0, 2.0]],
+        index=pd.Index(["r0"], name="i"),
+        columns=pd.Index(["c0", "c1"], name="j"),
+    ).to_jax()
+    B = DataMat(
+        [[10.0, 20.0]],
+        index=pd.Index(["different"], name="i"),
+        columns=pd.Index(["c0", "c1"], name="j"),
+    ).to_jax()
+
+    with pytest.raises(ValueError, match="DataMatJax \\+ DataMatJax \\(row axis\\)"):
+        A + B
+
+
+def test_datamatjax_elementwise_add_rejects_mismatched_columns():
+    from datamat import DataMat
+
+    A = DataMat(
+        [[1.0, 2.0]],
+        index=pd.Index(["r0"], name="i"),
+        columns=pd.Index(["c0", "c1"], name="j"),
+    ).to_jax()
+    B = DataMat(
+        [[10.0, 20.0]],
+        index=pd.Index(["r0"], name="i"),
+        columns=pd.Index(["c0", "c1"], name="OTHER"),
+    ).to_jax()
+
+    with pytest.raises(ValueError, match="DataMatJax \\+ DataMatJax \\(column axis\\)"):
+        A + B
+
+
+def test_datamatjax_elementwise_multiplication_is_forbidden():
+    from datamat import DataMat
+
+    A = DataMat([[1.0]], idxnames="i", colnames="j").to_jax()
+    B = DataMat([[2.0]], idxnames="i", colnames="j").to_jax()
+
+    with pytest.raises(TypeError, match="Element-wise multiplication"):
+        A * B
+
+
+# Same battery for DataVecJax
+def test_datavecjax_scalar_arithmetic_preserves_labels():
+    from datamat import DataVec
+
+    v = DataVec(
+        [1.0, 2.0, 3.0],
+        index=pd.Index(["a", "b", "c"], name="i"),
+        name="v",
+    ).to_jax()
+
+    for w in (2.0 * v, v * 2.0, v / 0.5):
+        np.testing.assert_allclose(np.asarray(w.values), [2.0, 4.0, 6.0])
+        assert w.name == "v"
+        assert list(w.index.names) == ["i"]
+
+    np.testing.assert_array_equal(np.asarray((-v).values), [-1.0, -2.0, -3.0])
+    np.testing.assert_array_equal(np.asarray((v + 1.0).values), [2.0, 3.0, 4.0])
+    np.testing.assert_array_equal(np.asarray((10.0 - v).values), [9.0, 8.0, 7.0])
+
+
+def test_datavecjax_elementwise_add_sub_with_matching_index():
+    from datamat import DataVec, DataVecJax
+
+    u = DataVec([1.0, 2.0], idxnames="i", name="u").to_jax()
+    w = DataVec([10.0, 20.0], idxnames="i", name="w").to_jax()
+
+    s = u + w
+    d = u - w
+
+    assert isinstance(s, DataVecJax) and isinstance(d, DataVecJax)
+    np.testing.assert_array_equal(np.asarray(s.values), [11.0, 22.0])
+    np.testing.assert_array_equal(np.asarray(d.values), [-9.0, -18.0])
+    # LHS name propagates.
+    assert s.name == "u" and d.name == "u"
+
+
+def test_datavecjax_elementwise_add_rejects_mismatched_index():
+    from datamat import DataVec
+
+    u = DataVec([1.0, 2.0], idxnames="i", name="u").to_jax()
+    w = DataVec([10.0, 20.0], idxnames="k", name="w").to_jax()
+
+    with pytest.raises(ValueError, match="DataVecJax \\+ DataVecJax"):
+        u + w
+
+
+def test_arithmetic_works_inside_jit_and_grad():
+    """End-to-end: a label-checked gradient step for ‖A x - b‖² written
+    entirely in labelled-operator form (matmul, +, -, * by lr)."""
+    from datamat import DataMat, DataVec, DataVecJax
+
+    A = DataMat(
+        [[1.0, 2.0], [3.0, 4.0]],
+        index=pd.Index(["r0", "r1"], name="i"),
+        columns=pd.Index(["c0", "c1"], name="j"),
+    ).to_jax()
+    b = DataVec(
+        [5.0, 11.0],
+        index=pd.Index(["r0", "r1"], name="i"),
+        name="b",
+    ).to_jax()
+
+    @jax.jit
+    def step(x, A, b, lr):
+        # Closed form for the gradient of ‖A x - b‖² is 2 A^T (A x - b).
+        # Build it with labelled operators.
+        residual = A @ x - b  # DataVecJax (index = i, name = x)
+        grad = A.T @ residual  # DataVecJax (index = j, name = x)
+        return x - lr * grad  # DataVecJax (index = j, name = x)
+
+    x = DataVec(
+        [0.0, 0.0],
+        index=pd.Index(["c0", "c1"], name="j"),
+        name="x",
+    ).to_jax()
+    for _ in range(2000):
+        x = step(x, A, b, 0.02)
+
+    assert isinstance(x, DataVecJax)
+    assert x.name == "x"
+    assert list(x.index.names) == ["j"]
+    closed = np.linalg.solve(np.asarray(A.values), np.asarray(b.values))
+    # Convergence is slow for this ill-conditioned 2x2 system under naive
+    # gradient descent; allow a relatively loose tolerance.
+    np.testing.assert_allclose(np.asarray(x.values), closed, atol=0.1)
+
+
 def test_datamatjax_transpose_swaps_axes_and_labels():
     from datamat import DataMatJax
 

@@ -1039,6 +1039,18 @@ def _static_to_index(meta: _IndexStatic) -> pd.MultiIndex:
     return pd.MultiIndex.from_tuples(list(tuples), names=list(names))
 
 
+def _is_jax_scalar(value: Any) -> bool:
+    """True if ``value`` is a Python or numpy/jax scalar.
+
+    Recognises anything with no ``shape`` attribute (Python ``int`` /
+    ``float``) and anything whose ``shape`` is the empty tuple (0-D
+    arrays — numpy scalars, ``jnp.array(0.05)``, JAX tracers of scalar
+    shape). 1-D length-1 arrays are *not* counted as scalars — the
+    user should explicitly squeeze if they mean a scalar.
+    """
+    return getattr(value, "shape", ()) == ()
+
+
 def _check_axis_alignment(left: pd.Index, right: pd.Index, op_label: str) -> None:
     """Raise if two axes don't have identical values *and* identical level names.
 
@@ -1146,6 +1158,107 @@ class DataMatJax:
             )
         return NotImplemented
 
+    def __neg__(self) -> "DataMatJax":
+        return DataMatJax(values=-self.values, index=self.index, columns=self.columns)
+
+    def __pos__(self) -> "DataMatJax":
+        return self
+
+    def __add__(self, other: Any) -> "DataMatJax":
+        if isinstance(other, DataMatJax):
+            _check_axis_alignment(
+                self.index, other.index, "DataMatJax + DataMatJax (row axis)"
+            )
+            _check_axis_alignment(
+                self.columns,
+                other.columns,
+                "DataMatJax + DataMatJax (column axis)",
+            )
+            return DataMatJax(
+                values=self.values + other.values,
+                index=self.index,
+                columns=self.columns,
+            )
+        if _is_jax_scalar(other):
+            return DataMatJax(
+                values=self.values + other,
+                index=self.index,
+                columns=self.columns,
+            )
+        return NotImplemented
+
+    __radd__ = __add__  # scalar + DataMatJax commutes; wrapper + wrapper handled above
+
+    def __sub__(self, other: Any) -> "DataMatJax":
+        if isinstance(other, DataMatJax):
+            _check_axis_alignment(
+                self.index, other.index, "DataMatJax - DataMatJax (row axis)"
+            )
+            _check_axis_alignment(
+                self.columns,
+                other.columns,
+                "DataMatJax - DataMatJax (column axis)",
+            )
+            return DataMatJax(
+                values=self.values - other.values,
+                index=self.index,
+                columns=self.columns,
+            )
+        if _is_jax_scalar(other):
+            return DataMatJax(
+                values=self.values - other,
+                index=self.index,
+                columns=self.columns,
+            )
+        return NotImplemented
+
+    def __rsub__(self, other: Any) -> "DataMatJax":
+        # Called for ``scalar - DataMatJax``; ``DataMatJax - DataMatJax``
+        # is handled by ``__sub__`` on the LHS.
+        if _is_jax_scalar(other):
+            return DataMatJax(
+                values=other - self.values,
+                index=self.index,
+                columns=self.columns,
+            )
+        return NotImplemented
+
+    def __mul__(self, other: Any) -> "DataMatJax":
+        if isinstance(other, DataMatJax | DataVecJax):
+            raise TypeError(
+                "Element-wise multiplication between labelled JAX wrappers is "
+                "intentionally not supported (ambiguous: Hadamard vs. "
+                "broadcast). Use ``self.values * other.values`` for raw "
+                "jnp semantics, or @ for matmul."
+            )
+        if _is_jax_scalar(other):
+            return DataMatJax(
+                values=self.values * other,
+                index=self.index,
+                columns=self.columns,
+            )
+        return NotImplemented
+
+    __rmul__ = __mul__
+
+    def __truediv__(self, other: Any) -> "DataMatJax":
+        if _is_jax_scalar(other):
+            return DataMatJax(
+                values=self.values / other,
+                index=self.index,
+                columns=self.columns,
+            )
+        return NotImplemented
+
+    def __rtruediv__(self, other: Any) -> "DataMatJax":
+        if _is_jax_scalar(other):
+            return DataMatJax(
+                values=other / self.values,
+                index=self.index,
+                columns=self.columns,
+            )
+        return NotImplemented
+
 
 if _JAX_AVAILABLE:  # pragma: no cover - depends on optional JAX
     jax_tree_util.register_pytree_node(
@@ -1221,13 +1334,84 @@ class DataVecJax:
             # Transpose of the ``M @ v`` case: contracted axis is the
             # vector's index against the matrix's *index* (rows); the
             # matrix's columns survive; the vector's name propagates.
-            _check_axis_alignment(
-                self.index, other.index, "DataVecJax @ DataMatJax"
-            )
+            _check_axis_alignment(self.index, other.index, "DataVecJax @ DataMatJax")
             return DataVecJax(
                 values=self.values @ other.values,
                 index=other.columns,
                 name=self.name,
+            )
+        return NotImplemented
+
+    def __neg__(self) -> "DataVecJax":
+        return DataVecJax(values=-self.values, index=self.index, name=self.name)
+
+    def __pos__(self) -> "DataVecJax":
+        return self
+
+    def __add__(self, other: Any) -> "DataVecJax":
+        if isinstance(other, DataVecJax):
+            _check_axis_alignment(self.index, other.index, "DataVecJax + DataVecJax")
+            return DataVecJax(
+                values=self.values + other.values,
+                index=self.index,
+                name=self.name,
+            )
+        if _is_jax_scalar(other):
+            return DataVecJax(
+                values=self.values + other, index=self.index, name=self.name
+            )
+        return NotImplemented
+
+    __radd__ = __add__
+
+    def __sub__(self, other: Any) -> "DataVecJax":
+        if isinstance(other, DataVecJax):
+            _check_axis_alignment(self.index, other.index, "DataVecJax - DataVecJax")
+            return DataVecJax(
+                values=self.values - other.values,
+                index=self.index,
+                name=self.name,
+            )
+        if _is_jax_scalar(other):
+            return DataVecJax(
+                values=self.values - other, index=self.index, name=self.name
+            )
+        return NotImplemented
+
+    def __rsub__(self, other: Any) -> "DataVecJax":
+        if _is_jax_scalar(other):
+            return DataVecJax(
+                values=other - self.values, index=self.index, name=self.name
+            )
+        return NotImplemented
+
+    def __mul__(self, other: Any) -> "DataVecJax":
+        if isinstance(other, DataMatJax | DataVecJax):
+            raise TypeError(
+                "Element-wise multiplication between labelled JAX wrappers is "
+                "intentionally not supported (ambiguous: Hadamard vs. "
+                "broadcast). Use ``self.values * other.values`` for raw "
+                "jnp semantics, or @ for matmul / dot."
+            )
+        if _is_jax_scalar(other):
+            return DataVecJax(
+                values=self.values * other, index=self.index, name=self.name
+            )
+        return NotImplemented
+
+    __rmul__ = __mul__
+
+    def __truediv__(self, other: Any) -> "DataVecJax":
+        if _is_jax_scalar(other):
+            return DataVecJax(
+                values=self.values / other, index=self.index, name=self.name
+            )
+        return NotImplemented
+
+    def __rtruediv__(self, other: Any) -> "DataVecJax":
+        if _is_jax_scalar(other):
+            return DataVecJax(
+                values=other / self.values, index=self.index, name=self.name
             )
         return NotImplemented
 
