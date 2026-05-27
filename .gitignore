@@ -33,3 +33,4 @@ Thumbs.db
 .coverage
 htmlcov/
 coverage.xml
+scripts/fetch-agent-branches.sh
