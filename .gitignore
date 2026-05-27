@@ -22,7 +22,12 @@ poetry.lock
 # OS metadata
 .DS_Store
 Thumbs.db
-.claude/
+# Ignore the *contents* of .claude/ (session state, settings, ...)
+# rather than the directory itself, so re-includes below work — git
+# refuses to re-include files inside a fully-ignored parent.
+.claude/*
+# Project-local skills travel with the repo.
+!.claude/skills/
 
 # Coverage artifacts
 .coverage
