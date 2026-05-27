@@ -297,6 +297,56 @@ def test_datavecjax_matmul_datavecjax_returns_scalar():
     assert float(s) == 140.0
 
 
+def test_datavecjax_matmul_datamatjax_keeps_columns_and_vector_name():
+    """``v @ M`` is the transpose of ``M @ v``: contracted axis is the
+    vector's index against the matrix's index (rows); the matrix's
+    columns survive as the result's index; the vector's name propagates."""
+    from datamat import DataMat, DataVec, DataVecJax
+
+    A = DataMat(
+        [[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]],
+        index=pd.Index(["r0", "r1", "r2"], name="i"),
+        columns=pd.Index(["c0", "c1"], name="j"),
+    ).to_jax()
+    v = DataVec(
+        [10.0, 20.0, 30.0],
+        index=pd.Index(["r0", "r1", "r2"], name="i"),
+        name="v",
+    ).to_jax()
+
+    r = v @ A
+
+    assert isinstance(r, DataVecJax)
+    assert list(r.index.names) == ["j"]
+    assert [t[0] for t in r.index.tolist()] == ["c0", "c1"]
+    assert r.name == "v"
+
+    # Algebraic identity: v @ A == A.T @ v.
+    transposed = A.T @ v
+    np.testing.assert_allclose(np.asarray(r.values), np.asarray(transposed.values))
+
+
+def test_datavecjax_matmul_datamatjax_rejects_mismatched_axis():
+    """``v @ M`` requires ``v.index`` to match ``M.index`` (not ``M.columns``);
+    a vector keyed to the columns is a common confusion that should raise."""
+    from datamat import DataMat, DataVec
+
+    A = DataMat(
+        [[1.0, 2.0], [3.0, 4.0]],
+        index=pd.Index(["r0", "r1"], name="i"),
+        columns=pd.Index(["c0", "c1"], name="j"),
+    ).to_jax()
+    # v has axis "j" but v @ A wants v's axis to match A.index ("i").
+    v_col_keyed = DataVec(
+        [1.0, 2.0],
+        index=pd.Index(["c0", "c1"], name="j"),
+        name="v",
+    ).to_jax()
+
+    with pytest.raises(ValueError, match="DataVecJax @ DataMatJax"):
+        v_col_keyed @ A
+
+
 def test_datamatjax_transpose_swaps_axes_and_labels():
     from datamat import DataMatJax
 

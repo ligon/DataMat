@@ -1217,6 +1217,18 @@ class DataVecJax:
             # Dot product. Contracted axis is each vector's own index.
             _check_axis_alignment(self.index, other.index, "DataVecJax @ DataVecJax")
             return self.values @ other.values  # scalar (0-D JaxArray)
+        if isinstance(other, DataMatJax):
+            # Transpose of the ``M @ v`` case: contracted axis is the
+            # vector's index against the matrix's *index* (rows); the
+            # matrix's columns survive; the vector's name propagates.
+            _check_axis_alignment(
+                self.index, other.index, "DataVecJax @ DataMatJax"
+            )
+            return DataVecJax(
+                values=self.values @ other.values,
+                index=other.columns,
+                name=self.name,
+            )
         return NotImplemented
 
 
